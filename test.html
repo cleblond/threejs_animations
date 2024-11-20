@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Three.js Clickable Spheres</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene, Camera, Renderer
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Raycaster and Mouse
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        let selectedObject = null;
+
+        // Add spheres (atoms)
+        const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const material1 = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
+        const material2 = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
+
+        const sphere1 = new THREE.Mesh(sphereGeometry, material1);
+        sphere1.position.set(-1, 0, 0); // Move to the left
+        const sphere2 = new THREE.Mesh(sphereGeometry, material2);
+        sphere2.position.set(1, 0, 0); // Move to the right
+
+        scene.add(sphere1, sphere2);
+
+        // Camera position
+        camera.position.z = 5;
+
+        // Event Listener for Clicks
+        renderer.domElement.addEventListener("mousedown", (event) => {
+            // Normalize mouse coordinates
+            const rect = renderer.domElement.getBoundingClientRect();
+            mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+            // Raycast
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects([sphere1, sphere2]);
+
+            if (intersects.length > 0) {
+                // If an object is clicked
+                if (selectedObject) {
+                    selectedObject.material.color.set(0xa2b9c4); // Reset color
+                }
+                selectedObject = intersects[0].object;
+                selectedObject.material.color.set(0xff0000); // Highlight selected
+                console.log("Selected object:", selectedObject);
+            } else {
+                console.log("No object selected.");
+            }
+        });
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+    </script>
+</body>
+</html>
+

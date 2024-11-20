@@ -5,7 +5,10 @@
     <title>Three.js Orbital App</title>
     <style>
         body { margin: 0; }
-        canvas { display: block; }
+        /*canvas { display: block; }*/
+        canvas {
+    		pointer-events: auto;
+	}
     </style>
 </head>
 <body>
@@ -17,13 +20,17 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script>
+    
+        //console.log("WHAT UP DUDE");
         // Three.js setup
         let scene = new THREE.Scene();
         let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         let renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
-        document.getElementById('container').appendChild(renderer.domElement);
+        //document.getElementById('container').appendChild(renderer.domElement);
+        document.body.appendChild(renderer.domElement);
 
+        
         // OrbitControls for 3D rotation
         let controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
@@ -31,6 +38,13 @@
         controls.rotateSpeed = 0.5;    // Increase rotation speed for better responsiveness
         
         
+        // Raycaster setup
+	const raycaster = new THREE.Raycaster();
+	//raycaster.setFromCamera( mouse3D, camera );
+	
+	const mouse = new THREE.Vector2();
+	
+	let selectedAtom = null; // To track the currently selected atom
 
         // Scene setup
         let atoms = [];
@@ -39,38 +53,94 @@
         let currentAtom = null;
         camera.position.z = 5;
 
-        // Add Atom Function
-        function addAtom() {
-            let geometry = new THREE.SphereGeometry(atomRadius, 32, 32);
-            let material = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
-            let atom = new THREE.Mesh(geometry, material);
-            //atom.position.set(x, y, z);
-            scene.add(atom);
-            atoms.push(atom);
-            currentAtom = atom;
-            render();
-        }
+// Add Atom Function
+function addAtom() {
+    console.log(currentAtom);
+    console.log(atoms.length);
 
-        // Add s Orbital Function
-        function addSOrbital() {
-            if (!currentAtom) return;
-                
-            let geometry = new THREE.SphereGeometry(0.4, 16, 16);
-            let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
-            let sOrbital = new THREE.Mesh(geometry, material);
-            sOrbital.position.copy(currentAtom.position);
-            sOrbital.name = "orbital"; // Set name property
-            scene.add(sOrbital);
-            render();
-        }
+    
+    let geometry = new THREE.SphereGeometry(atomRadius, 32, 32);
+    let material = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
+    let atom = new THREE.Mesh(geometry, material);
+    
+    if (atoms.length == 0) {
+    	atom.position.set(0, 0, 0);
+    } else if (atoms.length == 1) {
+    	atom.position.set(1, 0, 0);
+    }
 
-        // Add p Orbital Function
-        let pOrbitalCount = 0;
+    //atom.position.set(x, y, z);
+    atom.name = "atom"+atoms.length;
+    scene.add(atom);
+    atoms.push(atom);
+    console.log("Atoms array:", atoms);
+    
+    
+    //atom.name = "atom1";
+    currentAtom = atom;
+    render();
+}
+
+// Add s Orbital Function
+function addSOrbital() {
+    if (!currentAtom) return;
+        
+    let geometry = new THREE.SphereGeometry(0.4, 16, 16);
+    let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
+    let sOrbital = new THREE.Mesh(geometry, material);
+    sOrbital.position.copy(currentAtom.position);
+    sOrbital.name = "orbital"; // Set name property
+    scene.add(sOrbital);
+    render();
+}
+
+// Add p Orbital Function
+let pOrbitalCount = 0;
         
        
-        
-        
-        
+
+// Mouse event listener for selecting atoms
+function onMouseDown(event) {
+    // Calculate mouse position in normalized device coordinates (-1 to +1)
+    
+    if (event.target !== renderer.domElement) {
+        console.log("Click outside canvas detected.");
+        return;
+    }
+    
+    
+    console.log("mouse down");
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Set up the raycaster
+    raycaster.setFromCamera(mouse, camera);
+
+    // Check for intersections
+    const intersects = raycaster.intersectObjects(atoms);
+
+    if (intersects.length > 0) {
+        // If an atom is clicked, select it
+        if (selectedAtom) {
+            // Reset the material of the previously selected atom
+            selectedAtom.material.color.set(0xa2b9c4);
+        }
+
+        selectedAtom = intersects[0].object; // Get the first intersected object
+        selectedAtom.material.color.set(0xff0000); // Highlight the selected atom
+        currentAtom = selectedAtom;
+
+        console.log("Selected Atom:", selectedAtom.position);
+    }
+}
+
+//window.addEventListener("mousedown", onMouseDown);
+
+//console.log(renderer);
+
+//const rect = renderer.domElement.getBoundingClientRect();
+//console.log("Canvas Bounds:", rect);
+renderer.domElement.addEventListener("pointerdown", onMouseDown);        
         
 function createPOrbitalLobe() {
     // Define the profile curve as an array of Vector2 points
@@ -101,23 +171,36 @@ function createPOrbitalLobe() {
 
 
 //function addPOrbitalNew(direction1, direction2) {
-function addPOrbitalNew(direction1, anglerotation, axisrotation) {
+function setPOrbitalPosition(position, anglerotation, axisrotation) {
+//function addPOrbitalNew(direction1, anglerotation, axisrotation) {
     if (!currentAtom) return;
 
     // Create two lobes for the p orbital using the custom geometry function
     const pLobe1 = createPOrbitalLobe();
-    const pLobe2 = createPOrbitalLobe();
+    //const pLobe2 = createPOrbitalLobe();
 
     // Set the name property for filtering
     pLobe1.name = "orbital";
-    pLobe2.name = "orbital";
+    //pLobe2.name = "orbital";
 
     // Use direction1 and direction2 to set the positions of the lobes
+    
+    console.log(currentAtom.position.x + position.x * (atomRadius + 0.5));
+    
     pLobe1.position.set(
-        currentAtom.position.x + direction1.x * (atomRadius + 0.5),
-        currentAtom.position.y + direction1.y * (atomRadius + 0.5),
-        currentAtom.position.z + direction1.z * (atomRadius + 0.5)
+        currentAtom.position.x,
+        currentAtom.position.y,
+        currentAtom.position.z
     );
+    
+    
+    /*
+    pLobe1.position.set(
+        currentAtom.position.x + position.x * (atomRadius + 0.5),
+        currentAtom.position.y + position.y * (atomRadius + 0.5),
+        currentAtom.position.z + position.z * (atomRadius + 0.5)
+    );
+    */
 
     pLobe1.rotation[axisrotation] = anglerotation; // Rotate to align along the x-axis
 
@@ -137,38 +220,42 @@ function addPOrbitalNew(direction1, anglerotation, axisrotation) {
 
 
 
-addAtom();
+//addAtom();
 
 
-
+/*
 //positive x
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), -Math.PI/2, "z");
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), -Math.PI/2, "z");
 //negative x
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), +Math.PI/2, "z");
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), +Math.PI/2, "z");
 
 
 //positive y
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), 0, "x");
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), 0, "x");
 //negative y
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI, "z");
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), Math.PI, "z");
 
 //positive z
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI/2, "x");
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), Math.PI/2, "x");
 //negative z
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
-
+setPOrbitalPosition(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
+*/
 
 
 function addPOrbital() {
     if (!currentAtom || pOrbitalCount >= 3) return;
 
+    console.log(currentAtom.position.x);
 
-
-
+    //console.log(
     // Create two lobes for the p orbital using the custom geometry function
     const pLobe1 = createPOrbitalLobe();
     const pLobe2 = createPOrbitalLobe();
-
+    if (!selectedAtom) {selectedAtom = currentAtom;} 
+    
+    const x = selectedAtom.position.x;
+    const y = selectedAtom.position.y;
+    const z = selectedAtom.position.z;
 
     pLobe1.name = "orbital";
     pLobe2.name = "orbital";
@@ -178,25 +265,33 @@ function addPOrbital() {
 
     // Position and rotate the lobes along the appropriate axis
     if (pOrbitalCount === 0) { // Along the x-axis
-        pLobe1.scale.y = -1;
-        pLobe1.position.set(currentAtom.position.x + atomRadius, currentAtom.position.y, currentAtom.position.z);
-        pLobe2.position.set(currentAtom.position.x - atomRadius, currentAtom.position.y, currentAtom.position.z);
-        pLobe1.rotation.z = Math.PI / 2; // Rotate to align along the x-axis
-        pLobe2.rotation.z = Math.PI / 2;
+        //pLobe1.scale.y = -1;
+        //pLobe1.position.set(currentAtom.position.x + atomRadius, currentAtom.position.y, currentAtom.position.z);
+        //pLobe2.position.set(currentAtom.position.x - atomRadius, currentAtom.position.y, currentAtom.position.z);
+        //pLobe1.rotation.z = Math.PI / 2; // Rotate to align along the x-axis
+        //pLobe2.rotation.z = Math.PI / 2;
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z");
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z");
+        
     } else if (pOrbitalCount === 1) { // Along the y-axis
-        pLobe2.scale.y = -1;
-        pLobe1.position.set(currentAtom.position.x, currentAtom.position.y + atomRadius, currentAtom.position.z);
-        pLobe2.position.set(currentAtom.position.x, currentAtom.position.y - atomRadius, currentAtom.position.z);
+        //pLobe2.scale.y = -1;
+        //pLobe1.position.set(currentAtom.position.x, currentAtom.position.y + atomRadius, currentAtom.position.z);
+        //pLobe2.position.set(currentAtom.position.x, currentAtom.position.y - atomRadius, currentAtom.position.z);
+        //positive y
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x");
+	//negative y
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z");
+        
+        
     } else if (pOrbitalCount === 2) { // Along the z-axis
-        pLobe2.scale.y = -1;
-        pLobe1.position.set(currentAtom.position.x, currentAtom.position.y, currentAtom.position.z + atomRadius);
-        pLobe2.position.set(currentAtom.position.x, currentAtom.position.y, currentAtom.position.z - atomRadius);
-        pLobe1.rotation.x = Math.PI / 2; // Rotate to align along the z-axis
-        pLobe2.rotation.x = Math.PI / 2;
+	//positive z
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x");
+	//negative z
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x");
     }
 
-    scene.add(pLobe1);
-    scene.add(pLobe2);
+    //scene.add(pLobe1);
+    //scene.add(pLobe2);
     pOrbitalCount++;
     render();
 }
@@ -342,7 +437,7 @@ function createHybridOrbitalLobe() {
 
 // Render Function
 function render() {
-    scene.background = new THREE.Color( 0xd0dbe0 );
+    //scene.background = new THREE.Color( 0xd0dbe0 );
     requestAnimationFrame(render);
     controls.update();
     renderer.render(scene, camera);
