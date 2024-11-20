@@ -89,7 +89,8 @@ function addSOrbital() {
     let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
     let sOrbital = new THREE.Mesh(geometry, material);
     sOrbital.position.copy(currentAtom.position);
-    sOrbital.name = "orbital"; // Set name property
+    sOrbital.name = "s_orbital"; // Set name property
+    sOrbital.atom = currentAtom.name; // Set name property
     scene.add(sOrbital);
     render();
 }
@@ -142,7 +143,7 @@ function onMouseDown(event) {
 //console.log("Canvas Bounds:", rect);
 renderer.domElement.addEventListener("pointerdown", onMouseDown);        
         
-function createPOrbitalLobe() {
+function createPOrbitalLobe(lobecolor) {
     // Define the profile curve as an array of Vector2 points
     
     const points = [];
@@ -162,7 +163,14 @@ function createPOrbitalLobe() {
 
     // Create LatheGeometry by revolving the profile curve
     const geometry = new THREE.LatheGeometry(points, 32); // 32 segments for smoothness
-    const material = new THREE.MeshBasicMaterial({ color: 0xff0000, wireframe: true });
+    
+    //if (lobenumber==1) {
+    //var lobecolor = 0xff0000;
+    //} else {
+    //var lobecolor = 0x0000ff;
+    //}
+
+    const material = new THREE.MeshBasicMaterial({ color: lobecolor, wireframe: true });
     const lobe = new THREE.Mesh(geometry, material);
 
     return lobe;
@@ -249,16 +257,18 @@ function addPOrbital() {
 
     //console.log(
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe();
-    const pLobe2 = createPOrbitalLobe();
+    const pLobe1 = createPOrbitalLobe(1);
+    const pLobe2 = createPOrbitalLobe(2);
     if (!selectedAtom) {selectedAtom = currentAtom;} 
     
     const x = selectedAtom.position.x;
     const y = selectedAtom.position.y;
     const z = selectedAtom.position.z;
 
-    pLobe1.name = "orbital";
-    pLobe2.name = "orbital";
+    pLobe1.name = "p_orbital";
+    pLobe2.name = "p_orbital";
+    pLobe1.atom = selectedAtom.name;
+    pLobe2.atom = selectedAtom.name;
 
     // Flip the second lobe along the y-axis to make it point in the opposite direction
     //pLobe1.scale.y = -1;
@@ -361,11 +371,13 @@ function addAxisLabel(text, x, y, z, color) {
 // Add Hybridize Button Functionality
 function hybridizeOrbitals() {
 
+   //console.log(JSON.parse(JSON.stringify(scene.children)));
 
+   console.log(scene.children);
 
     const totalOrbitals = scene.children.filter(obj => obj.name === "orbital").length;
 
-    console.log(totalOrbitals);
+    console.log(totalOrbitalss);
 
     // Remove existing orbitals before hybridizing
     scene.children = scene.children.filter(obj => obj.name !== "orbital");
