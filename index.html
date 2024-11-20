@@ -55,8 +55,8 @@
 
 // Add Atom Function
 function addAtom() {
-    console.log(currentAtom);
-    console.log(atoms.length);
+    //console.log(currentAtom);
+    //console.log(atoms.length);
 
     
     let geometry = new THREE.SphereGeometry(atomRadius, 32, 32);
@@ -66,14 +66,14 @@ function addAtom() {
     if (atoms.length == 0) {
     	atom.position.set(0, 0, 0);
     } else if (atoms.length == 1) {
-    	atom.position.set(1, 0, 0);
+    	atom.position.set(2, 0, 0);
     }
 
     //atom.position.set(x, y, z);
     atom.name = "atom"+atoms.length;
     scene.add(atom);
     atoms.push(atom);
-    console.log("Atoms array:", atoms);
+    //console.log("Atoms array:", atoms);
     
     
     //atom.name = "atom1";
@@ -110,7 +110,7 @@ function onMouseDown(event) {
     }
     
     
-    console.log("mouse down");
+    //console.log("mouse down");
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -131,7 +131,7 @@ function onMouseDown(event) {
         selectedAtom.material.color.set(0xff0000); // Highlight the selected atom
         currentAtom = selectedAtom;
 
-        console.log("Selected Atom:", selectedAtom.position);
+        //console.log("Selected Atom:", selectedAtom.position);
     }
 }
 
@@ -169,6 +169,8 @@ function createPOrbitalLobe(lobecolor) {
     //} else {
     //var lobecolor = 0x0000ff;
     //}
+    
+    //console.log(lobecolor);
 
     const material = new THREE.MeshBasicMaterial({ color: lobecolor, wireframe: true });
     const lobe = new THREE.Mesh(geometry, material);
@@ -179,12 +181,12 @@ function createPOrbitalLobe(lobecolor) {
 
 
 //function addPOrbitalNew(direction1, direction2) {
-function setPOrbitalPosition(position, anglerotation, axisrotation) {
+function setPOrbitalPosition(position, anglerotation, axisrotation, color) {
 //function addPOrbitalNew(direction1, anglerotation, axisrotation) {
     if (!currentAtom) return;
 
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe();
+    const pLobe1 = createPOrbitalLobe(color);
     //const pLobe2 = createPOrbitalLobe();
 
     // Set the name property for filtering
@@ -193,7 +195,7 @@ function setPOrbitalPosition(position, anglerotation, axisrotation) {
 
     // Use direction1 and direction2 to set the positions of the lobes
     
-    console.log(currentAtom.position.x + position.x * (atomRadius + 0.5));
+    //console.log(currentAtom.position.x + position.x * (atomRadius + 0.5));
     
     pLobe1.position.set(
         currentAtom.position.x,
@@ -251,15 +253,23 @@ setPOrbitalPosition(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
 
 
 function addPOrbital() {
-    if (!currentAtom || pOrbitalCount >= 3) return;
-
-    console.log(currentAtom.position.x);
+    if (!currentAtom /*|| pOrbitalCount >= 3*/) return;
+    if (!selectedAtom) {selectedAtom = currentAtom;}
+    
+    console.log(selectedAtom.name);
+    
+    
+    const OrbitalsOnAtom = scene.children.filter(obj => obj.atom === selectedAtom.name);
+    console.log(OrbitalsOnAtom);
+    const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length;
+    console.log(totalpOrbitalsOnAtom);
+    
 
     //console.log(
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe(1);
-    const pLobe2 = createPOrbitalLobe(2);
-    if (!selectedAtom) {selectedAtom = currentAtom;} 
+    const pLobe1 = createPOrbitalLobe();
+    const pLobe2 = createPOrbitalLobe();
+
     
     const x = selectedAtom.position.x;
     const y = selectedAtom.position.y;
@@ -274,30 +284,30 @@ function addPOrbital() {
     //pLobe1.scale.y = -1;
 
     // Position and rotate the lobes along the appropriate axis
-    if (pOrbitalCount === 0) { // Along the x-axis
+    if (totalpOrbitalsOnAtom === 0) { // Along the x-axis
         //pLobe1.scale.y = -1;
         //pLobe1.position.set(currentAtom.position.x + atomRadius, currentAtom.position.y, currentAtom.position.z);
         //pLobe2.position.set(currentAtom.position.x - atomRadius, currentAtom.position.y, currentAtom.position.z);
         //pLobe1.rotation.z = Math.PI / 2; // Rotate to align along the x-axis
         //pLobe2.rotation.z = Math.PI / 2;
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z");
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z");
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000);
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
         
-    } else if (pOrbitalCount === 1) { // Along the y-axis
+    } else if (totalpOrbitalsOnAtom === 1) { // Along the y-axis
         //pLobe2.scale.y = -1;
         //pLobe1.position.set(currentAtom.position.x, currentAtom.position.y + atomRadius, currentAtom.position.z);
         //pLobe2.position.set(currentAtom.position.x, currentAtom.position.y - atomRadius, currentAtom.position.z);
         //positive y
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x");
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000);
 	//negative y
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z");
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff);
         
         
-    } else if (pOrbitalCount === 2) { // Along the z-axis
+    } else if (totalpOrbitalsOnAtom === 2) { // Along the z-axis
 	//positive z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x");
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x", 0xff0000);
 	//negative z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x");
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff);
     }
 
     //scene.add(pLobe1);
@@ -373,11 +383,11 @@ function hybridizeOrbitals() {
 
    //console.log(JSON.parse(JSON.stringify(scene.children)));
 
-   console.log(scene.children);
+   //console.log(scene.children);
 
     const totalOrbitals = scene.children.filter(obj => obj.name === "orbital").length;
 
-    console.log(totalOrbitalss);
+    //console.log(totalOrbitalss);
 
     // Remove existing orbitals before hybridizing
     scene.children = scene.children.filter(obj => obj.name !== "orbital");
