@@ -55,7 +55,7 @@
         function addSOrbital() {
             if (!currentAtom) return;
                 
-            let geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            let geometry = new THREE.SphereGeometry(0.4, 16, 16);
             let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
             let sOrbital = new THREE.Mesh(geometry, material);
             sOrbital.position.copy(currentAtom.position);
@@ -74,17 +74,6 @@
         
 function createPOrbitalLobe() {
     // Define the profile curve as an array of Vector2 points
-    
-    /*
-    const points = [];
-    points.push(new THREE.Vector2(0, 0));    // start of orbital
-    points.push(new THREE.Vector2(0.05, 0.3));  // Gradually widen
-    points.push(new THREE.Vector2(0.07, 0.6));   // Maximum width
-    points.push(new THREE.Vector2(0.3, 0.8));    // Taper near the top
-    points.push(new THREE.Vector2(0.3, 0.9));    // Taper near the top
-    points.push(new THREE.Vector2(0.3, 1));    // Taper near the top
-    points.push(new THREE.Vector2(0, lengthpLobe));  // end of orbital
-    */
     
     const points = [];
     points.push(new THREE.Vector2(0, 0));    // start of orbital
@@ -150,22 +139,23 @@ function addPOrbitalNew(direction1, anglerotation, axisrotation) {
 
 addAtom();
 
-//positive y
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), 0, "x");
 
-//negative y
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI, "z");
-
-
-//positive z
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI/2, "x");
-addPOrbitalNew(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
 
 //positive x
 addPOrbitalNew(new THREE.Vector3(0, 0, 0), -Math.PI/2, "z");
 //negative x
 addPOrbitalNew(new THREE.Vector3(0, 0, 0), +Math.PI/2, "z");
 
+
+//positive y
+addPOrbitalNew(new THREE.Vector3(0, 0, 0), 0, "x");
+//negative y
+addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI, "z");
+
+//positive z
+addPOrbitalNew(new THREE.Vector3(0, 0, 0), Math.PI/2, "x");
+//negative z
+addPOrbitalNew(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
 
 
 
@@ -258,15 +248,15 @@ function addAxes() {
 function addAxisLabel(text, x, y, z, color) {
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d");
-    context.font = "24px Arial";
+    context.font = "32px Arial";
     context.fillStyle = "#" + color.toString(16).padStart(6, '0');
-    context.fillText(text, 0, 24); // Draw text on canvas
+    context.fillText(text, 0, 64); // Draw text on canvas
 
     const texture = new THREE.CanvasTexture(canvas);
     const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
     const sprite = new THREE.Sprite(spriteMaterial);
     sprite.position.set(x, y, z);
-    sprite.scale.set(0.5, 0.5, 0.5); // Adjust size
+    //sprite.scale.set(0.5, 0.5, 0.5); // Adjust size
     scene.add(sprite);
 }
 
@@ -352,6 +342,7 @@ function createHybridOrbitalLobe() {
 
 // Render Function
 function render() {
+    scene.background = new THREE.Color( 0xd0dbe0 );
     requestAnimationFrame(render);
     controls.update();
     renderer.render(scene, camera);
