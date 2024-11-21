@@ -102,11 +102,12 @@ function onMouseDown(event) {
         // If an atom is clicked, select it
         if (selectedAtom) {
             // Reset the material of the previously selected atom
+            //FFF59D
             selectedAtom.material.color.set(0xa2b9c4);
         }
 
         selectedAtom = intersects[0].object; // Get the first intersected object
-        selectedAtom.material.color.set(0xff0000); // Highlight the selected atom
+        selectedAtom.material.color.set(0xFFF59D); // Highlight the selected atom
         currentAtom = selectedAtom;
 
         //console.log("Selected Atom:", selectedAtom.position);
@@ -156,54 +157,60 @@ function createPOrbitalLobe(lobecolor) {
 
 
 
-//function addPOrbitalNew(direction1, direction2) {
 function setPOrbitalPosition(position, anglerotation, axisrotation, color) {
-//function addPOrbitalNew(direction1, anglerotation, axisrotation) {
+
     if (!currentAtom) return;
 
     // Create two lobes for the p orbital using the custom geometry function
     const pLobe1 = createPOrbitalLobe(color);
-    //const pLobe2 = createPOrbitalLobe();
 
     // Set the name property for filtering
     pLobe1.name = "p_orbital";
     pLobe1.parentAtom = currentAtom.name;
-    //pLobe2.name = "orbital";
 
-    // Use direction1 and direction2 to set the positions of the lobes
-    
-    //console.log(currentAtom.position.x + position.x * (atomRadius + 0.5));
-    
     pLobe1.position.set(
         currentAtom.position.x,
         currentAtom.position.y,
         currentAtom.position.z
     );
-    
-    
-    /*
-    pLobe1.position.set(
-        currentAtom.position.x + position.x * (atomRadius + 0.5),
-        currentAtom.position.y + position.y * (atomRadius + 0.5),
-        currentAtom.position.z + position.z * (atomRadius + 0.5)
-    );
-    */
+
 
     pLobe1.rotation[axisrotation] = anglerotation; // Rotate to align along the x-axis
 
-    /*
-    pLobe2.position.set(
-        currentAtom.position.x + direction1.x * (atomRadius + 0.5),
-        currentAtom.position.y + direction1.y * (atomRadius + 0.5),
-        currentAtom.position.z + direction1.z * (atomRadius + 0.5)
-    );
-    */
-
-
     scene.add(pLobe1);
-    //scene.add(pLobe2);
+
     render();
 }
+
+
+
+function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2,  color) {
+
+    if (!currentAtom) return;
+
+    // Create two lobes for the p orbital using the custom geometry function
+    const pLobe1 = createPOrbitalLobe(color);
+
+    // Set the name property for filtering
+    pLobe1.name = "p_orbital";
+    pLobe1.parentAtom = currentAtom.name;
+
+    pLobe1.position.set(
+        currentAtom.position.x,
+        currentAtom.position.y,
+        currentAtom.position.z
+    );
+
+
+    pLobe1.rotation[axisrotation1] = anglerotation1; // Rotate to align along the x-axis
+    pLobe1.rotation[axisrotation2] = anglerotation2;
+
+    scene.add(pLobe1);
+
+    render();
+}
+
+
 
 
 
@@ -233,14 +240,14 @@ function addPOrbital() {
     if (!currentAtom /*|| pOrbitalCount >= 3*/) return;
     if (!selectedAtom) {selectedAtom = currentAtom;}
     
-    console.log(selectedAtom.name);
+    //console.log(selectedAtom.name);
     
-    console.log(scene.children);
+    //console.log(scene.children);
     
     const OrbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
-    console.log(OrbitalsOnAtom);
+    //console.log(OrbitalsOnAtom);
     const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
-    console.log(totalpOrbitalsOnAtom);
+    //console.log(totalpOrbitalsOnAtom);
     
 
     //console.log(
@@ -263,19 +270,11 @@ function addPOrbital() {
 
     // Position and rotate the lobes along the appropriate axis
     if (totalpOrbitalsOnAtom === 0) { // Along the x-axis
-        //pLobe1.scale.y = -1;
-        //pLobe1.position.set(currentAtom.position.x + atomRadius, currentAtom.position.y, currentAtom.position.z);
-        //pLobe2.position.set(currentAtom.position.x - atomRadius, currentAtom.position.y, currentAtom.position.z);
-        //pLobe1.rotation.z = Math.PI / 2; // Rotate to align along the x-axis
-        //pLobe2.rotation.z = Math.PI / 2;
+
         setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000);
         setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
         
     } else if (totalpOrbitalsOnAtom === 1) { // Along the y-axis
-        //pLobe2.scale.y = -1;
-        //pLobe1.position.set(currentAtom.position.x, currentAtom.position.y + atomRadius, currentAtom.position.z);
-        //pLobe2.position.set(currentAtom.position.x, currentAtom.position.y - atomRadius, currentAtom.position.z);
-        //positive y
 	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000);
 	//negative y
 	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff);
@@ -360,31 +359,63 @@ function addAxisLabel(text, x, y, z, color) {
 function hybridizeOrbitals() {
 
    //console.log(JSON.parse(JSON.stringify(scene.children)));
+   
+    if (!selectedAtom) {selectedAtom = currentAtom;}
+   
+   
+    const orbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
+    const totalpOrbitalsOnAtom = orbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
 
-   //console.log(scene.children);
+    console.log(totalpOrbitalsOnAtom);
 
     const totalOrbitals = scene.children.filter(obj => obj.name === "orbital").length;
 
     //console.log(totalOrbitalss);
 
     // Remove existing orbitals before hybridizing
-    scene.children = scene.children.filter(obj => obj.name !== "orbital");
+    scene.children = scene.children.filter(obj => obj.name !== "p_orbital");
+    scene.children = scene.children.filter(obj => obj.name !== "s_orbital");
+    
+    const x = selectedAtom.position.x;
+    const y = selectedAtom.position.y;
+    const z = selectedAtom.position.z;
+    
 
-    if (totalOrbitals === 2) {
+    if (totalpOrbitalsOnAtom === 1) { //atmost (2)sp
         // sp Hybridization (linear, two orbitals at 180 degrees)
         addHybridOrbital(new THREE.Vector3(1, 0, 0));
         addHybridOrbital(new THREE.Vector3(-1, 0, 0));
-    } else if (totalOrbitals === 3) {
+    } else if (totalpOrbitalsOnAtom === 2) {//(3)sp2 or (2)sp / (1)p
         // sp² Hybridization (trigonal planar, three orbitals at 120 degrees)
         addHybridOrbital(new THREE.Vector3(Math.cos(0), Math.sin(0), 0));
         addHybridOrbital(new THREE.Vector3(Math.cos(2 * Math.PI / 3), Math.sin(2 * Math.PI / 3), 0));
         addHybridOrbital(new THREE.Vector3(Math.cos(4 * Math.PI / 3), Math.sin(4 * Math.PI / 3), 0));
-    } else if (totalOrbitals === 4) {
+    } else if (totalpOrbitalsOnAtom === 3) {//(4) sp3 or (3)sp2 / (1)p or (2)sp / (2)p  
         // sp³ Hybridization (tetrahedral, four orbitals at ~109.5 degrees)
+        
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x00ffff);
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
+        
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff);
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0x0000ff);
+        
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff);
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x",  0x0000ff);
+        
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
+        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x",  0x00ffff);
+
+        //setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
+        //setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", +80*Math.PI/120, "x",  0x0000ff);
+
+
+        
+        /*
         addHybridOrbital(new THREE.Vector3(1, 1, 1).normalize());
         addHybridOrbital(new THREE.Vector3(1, -1, -1).normalize());
         addHybridOrbital(new THREE.Vector3(-1, 1, -1).normalize());
         addHybridOrbital(new THREE.Vector3(-1, -1, 1).normalize());
+        */
     }
 
     render();
@@ -429,10 +460,11 @@ function createHybridOrbitalLobe() {
 
 
 
-
-
-
-
+addAtom();
+addSOrbital();
+addPOrbital();
+addPOrbital();
+addPOrbital();
         
 
 // Render Function
