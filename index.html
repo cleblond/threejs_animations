@@ -4,26 +4,47 @@
     <meta charset="UTF-8">
     <title>Three.js Orbital App</title>
     <style>
-        body { margin: 0; }
+        body { margin: 0;
+            overflow: hidden;
+        }
         /*canvas { display: block; }*/
         canvas {
     		pointer-events: auto;
+    		    width: 100%;
+    height: 100%;
+    display: block; /* Ensures no extra padding/margin around the canvas */
+    		
+    		
 	}
+	
+	
+
+	
     </style>
 </head>
 <body>
-    <button onclick="addAtom()">Add Atom (C)</button>
-    <button onclick="addSOrbital()">Add s Orbital</button>
-    <button onclick="addPOrbital()">Add p Orbital</button>
-    <button onclick="hybridizeOrbitals()">Hybridize()</button>
-    <div id="container"></div>
+
+    <div id="container">
+        <div id="controls" style="position: absolute; top: 10px; left: 10px; z-index: 10;">
+
+	    <button onclick="addAtom()">Add Atom (C)</button>
+	    <button onclick="addSOrbital()">Add s Orbital</button>
+	    <button onclick="addPOrbital()">Add p Orbital</button>
+	    <button onclick="hybridizeOrbitals()">Hybridize</button>
+	</div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-
-    
-    
     <script src="app.js"></script>
 
+	<div id="hybridizationModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+	    padding: 20px; background: white; border: 1px solid #ccc; border-radius: 8px; z-index: 1000; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
+	    <h3>Choose Hybridization</h3>
+	    <div id="options"></div>
+	    <button onclick="closeModal()">Cancel</button>
+	</div>
+
+    </div>
 
 </body>
 </html>

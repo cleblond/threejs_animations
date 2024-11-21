@@ -1,11 +1,8 @@
-    
-//console.log("WHAT UP DUDE");
 // Three.js setup
 let scene = new THREE.Scene();
 let camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 let renderer = new THREE.WebGLRenderer();
 renderer.setSize(window.innerWidth, window.innerHeight);
-//document.getElementById('container').appendChild(renderer.domElement);
 document.body.appendChild(renderer.domElement);
 
 
@@ -33,10 +30,7 @@ camera.position.z = 5;
 
 // Add Atom Function
 function addAtom() {
-    //console.log(currentAtom);
-    //console.log(atoms.length);
 
-    
     let geometry = new THREE.SphereGeometry(atomRadius, 32, 32);
     let material = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
     let atom = new THREE.Mesh(geometry, material);
@@ -51,10 +45,7 @@ function addAtom() {
     atom.name = "atom"+atoms.length;
     scene.add(atom);
     atoms.push(atom);
-    //console.log("Atoms array:", atoms);
-    
-    
-    //atom.name = "atom1";
+
     currentAtom = atom;
     render();
 }
@@ -73,10 +64,6 @@ function addSOrbital() {
     render();
 }
 
-// Add p Orbital Function
-let pOrbitalCount = 0;
-        
-       
 
 // Mouse event listener for selecting atoms
 function onMouseDown(event) {
@@ -120,7 +107,7 @@ renderer.domElement.addEventListener("pointerdown", onMouseDown);
 
 
 
-function createPOrbitalLobe(lobecolor) {
+function createPOrbitalLobe(lobecolor, scaleFactor = 1) {
     // Define the profile curve as an array of Vector2 points
     
     const points = [];
@@ -140,29 +127,23 @@ function createPOrbitalLobe(lobecolor) {
 
     // Create LatheGeometry by revolving the profile curve
     const geometry = new THREE.LatheGeometry(points, 32); // 32 segments for smoothness
-    
-    //if (lobenumber==1) {
-    //var lobecolor = 0xff0000;
-    //} else {
-    //var lobecolor = 0x0000ff;
-    //}
-    
-    //console.log(lobecolor);
 
     const material = new THREE.MeshBasicMaterial({ color: lobecolor, wireframe: true });
     const lobe = new THREE.Mesh(geometry, material);
+    lobe.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
 
     return lobe;
 }
 
 
 
-function setPOrbitalPosition(position, anglerotation, axisrotation, color) {
+function setPOrbitalPosition(position, anglerotation, axisrotation, color, scalefactor=1) {
 
     if (!currentAtom) return;
 
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe(color);
+    const pLobe1 = createPOrbitalLobe(color, scalefactor);
 
     // Set the name property for filtering
     pLobe1.name = "p_orbital";
@@ -184,12 +165,12 @@ function setPOrbitalPosition(position, anglerotation, axisrotation, color) {
 
 
 
-function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2,  color) {
+function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2,  color, scalefactor=1) {
 
     if (!currentAtom) return;
 
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe(color);
+    const pLobe1 = createPOrbitalLobe(color, scalefactor);
 
     // Set the name property for filtering
     pLobe1.name = "p_orbital";
@@ -209,31 +190,6 @@ function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, a
 
     render();
 }
-
-
-
-
-
-//addAtom();
-
-
-/*
-//positive x
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), -Math.PI/2, "z");
-//negative x
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), +Math.PI/2, "z");
-
-
-//positive y
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), 0, "x");
-//negative y
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), Math.PI, "z");
-
-//positive z
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), Math.PI/2, "x");
-//negative z
-setPOrbitalPosition(new THREE.Vector3(0, 0, 0), -Math.PI/2, "x");
-*/
 
 
 function addPOrbital() {
@@ -265,8 +221,6 @@ function addPOrbital() {
     pLobe1.atom = selectedAtom.name;
     pLobe2.atom = selectedAtom.name;
 
-    // Flip the second lobe along the y-axis to make it point in the opposite direction
-    //pLobe1.scale.y = -1;
 
     // Position and rotate the lobes along the appropriate axis
     if (totalpOrbitalsOnAtom === 0) { // Along the x-axis
@@ -287,9 +241,6 @@ function addPOrbital() {
 	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff);
     }
 
-    //scene.add(pLobe1);
-    //scene.add(pLobe2);
-    //pOrbitalCount++;
     render();
 }
 
@@ -352,11 +303,9 @@ function addAxisLabel(text, x, y, z, color) {
     scene.add(sprite);
 }
 
-// Call the addAxes function once to add the axes and labels to the scene
-
 
 // Add Hybridize Button Functionality
-function hybridizeOrbitals() {
+async function hybridizeOrbitals() {
 
    //console.log(JSON.parse(JSON.stringify(scene.children)));
    
@@ -368,9 +317,11 @@ function hybridizeOrbitals() {
 
     console.log(totalpOrbitalsOnAtom);
 
-    const totalOrbitals = scene.children.filter(obj => obj.name === "orbital").length;
-
-    //console.log(totalOrbitalss);
+    
+    const userSelection = await showHybridizationModal(totalpOrbitalsOnAtom);
+    
+    console.log(userSelection);
+    
 
     // Remove existing orbitals before hybridizing
     scene.children = scene.children.filter(obj => obj.name !== "p_orbital");
@@ -383,39 +334,108 @@ function hybridizeOrbitals() {
 
     if (totalpOrbitalsOnAtom === 1) { //atmost (2)sp
         // sp Hybridization (linear, two orbitals at 180 degrees)
-        addHybridOrbital(new THREE.Vector3(1, 0, 0));
-        addHybridOrbital(new THREE.Vector3(-1, 0, 0));
+        if (userSelection == "2sp") {
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, 0.5); //red
+		
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 0.5); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff); //red
+        }
+        
+        
+        
+        
     } else if (totalpOrbitalsOnAtom === 2) {//(3)sp2 or (2)sp / (1)p
         // sp² Hybridization (trigonal planar, three orbitals at 120 degrees)
-        addHybridOrbital(new THREE.Vector3(Math.cos(0), Math.sin(0), 0));
-        addHybridOrbital(new THREE.Vector3(Math.cos(2 * Math.PI / 3), Math.sin(2 * Math.PI / 3), 0));
-        addHybridOrbital(new THREE.Vector3(Math.cos(4 * Math.PI / 3), Math.sin(4 * Math.PI / 3), 0));
+
+        
+        //(3) sp2 hybrid
+        if (userSelection == "3sp2") {
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  0.5); //red
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  0.5);
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  0.5);   
+        }
+        
+        //(2) sp2 hybrid and 1 p
+        if (userSelection == "2sp_1p") {
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, 0.5); //red
+		
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 0.5); //red
+		
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+        }
+        
+        
+        
+        
+        
     } else if (totalpOrbitalsOnAtom === 3) {//(4) sp3 or (3)sp2 / (1)p or (2)sp / (2)p  
-        // sp³ Hybridization (tetrahedral, four orbitals at ~109.5 degrees)
         
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x00ffff);
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
         
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff);
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0x0000ff);
+        if (userSelection == "4sp3") {
         
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff);
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x",  0x0000ff);
+		// (3) sp³ Hybridization (tetrahedral, four orbitals at ~109.5 degrees)
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  0.5); //red
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0xff0000,  0.5);
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -40*Math.PI/120, "x",  0xff0000,  0.5);
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", 40*Math.PI/120, "x",  0xff0000,  0.5);
+		
+        }
         
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
-        setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x",  0x00ffff);
+        
+        if (userSelection == "3sp2_1p") {
+        
+		// (3) sp2 hybrid with (1) p
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000); //red
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  0.5);
+		
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  0.5);        
+		//non hybrid p orbital
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+		
+        }
+        
+        if (userSelection == "2sp_2p") {
+        
+		// (2) sp hybrid with (2) p
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  0.5); //red
+		
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff,  0.5); //red
+		
+		
+		//non hybrid p orbital along y
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+		
+		//non hybrid p orbital along z
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0xff0000); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "x", 0x0000ff); //red
+        
+        }
 
-        //setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
-        //setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", +80*Math.PI/120, "x",  0x0000ff);
 
-
-        
-        /*
-        addHybridOrbital(new THREE.Vector3(1, 1, 1).normalize());
-        addHybridOrbital(new THREE.Vector3(1, -1, -1).normalize());
-        addHybridOrbital(new THREE.Vector3(-1, 1, -1).normalize());
-        addHybridOrbital(new THREE.Vector3(-1, -1, 1).normalize());
-        */
     }
 
     render();
@@ -430,42 +450,90 @@ function addHybridOrbital(direction) {
     scene.add(hybridLobe);
 }
 
-// Create a hybrid orbital lobe with a new set of points
-function createHybridOrbitalLobe() {
+
+function showHybridizationModal(totalpOrbitals) {
+
+  return new Promise((resolve) => {
+    const modal = document.getElementById('hybridizationModal');
+    const optionsDiv = document.getElementById('options');
+    optionsDiv.innerHTML = ''; // Clear existing options
+
+    console.log(totalpOrbitals);
+
+    let options = [];
+    if (totalpOrbitals === 3) {
+            options = [
+                { label: '4 sp³ hybrid', value: '4sp3' },
+                { label: '3 sp² hybrid and 1 p', value: '3sp2_1p' },
+                { label: '2 sp hybrid and 2 p', value: '2sp_2p' }
+            ];
+    
+        //options = ['4 sp³ hybrid', '3 sp² hybrid and 1 p', '2 sp hybrid and 2 p'];
+    } else if (totalpOrbitals === 2) {
+        //options = ['3 sp² hybrid', '2 sp hybrid and 1 p'];
+            options = [
+                { label: '3 sp² hybrid', value: '3sp2' },
+                { label: '2 sp hybrid and 1 p', value: '2sp_1p' }
+            ];
 
     
-    const points = [];
-    points.push(new THREE.Vector2(0, 0));    // start of orbital
-    points.push(new THREE.Vector2(0.05, 0.1));  // Gradually widen
-    points.push(new THREE.Vector2(0.07, 0.2));   // Maximum width
-    points.push(new THREE.Vector2(0.1, 0.3));    // Taper near the top
-    points.push(new THREE.Vector2(0.15, 0.4));    // Taper near the top
-    points.push(new THREE.Vector2(0.2, 0.5));    // Taper near the top
-    points.push(new THREE.Vector2(0.25, 0.6));    // Taper near the top
-    points.push(new THREE.Vector2(0.3, 0.7));    // Taper near the top
-    points.push(new THREE.Vector2(0.3, 0.8));    // Taper near the top
-    points.push(new THREE.Vector2(0.27, 0.9));    // Taper near the top
-    points.push(new THREE.Vector2(0.2, 0.95));    // Taper near the top                    
-    points.push(new THREE.Vector2(0, lengthpLobe));  // end of orbital
     
+    } else if (totalpOrbitals === 1) {
+        //options = ['2 sp hybrid'];
+            options = [{ label: '2 sp hybrid', value: '2sp' }];
     
-    const geometry = new THREE.LatheGeometry(points, 32);
-    const material = new THREE.MeshBasicMaterial({ color: 0xffa500, wireframe: true });
-    const lobe = new THREE.Mesh(geometry, material);
-    return lobe;
+    }
+
+    // Dynamically add buttons for each option
+    options.forEach(option => {
+        const button = document.createElement('button');
+        button.textContent = option.label;
+        button.style.margin = '5px';
+        button.onclick = () => {
+            resolve(option.value);
+            handleHybridizationSelection(option);
+        };
+        optionsDiv.appendChild(button);
+    });
+
+    modal.style.display = 'block';
+
+  });
+
 }
 
-// Add button event listener
-//document.getElementById("hybridizeButton").onclick = hybridizeOrbitals;
+function closeModal() {
+    const modal = document.getElementById('hybridizationModal');
+    modal.style.display = 'none';
+}
+
+function handleHybridizationSelection(option) {
+    console.log('User selected:', option);
+    closeModal();
+
+    // Perform hybridization based on the selected option
+    if (option === '4 sp³ hybrid') {
+        // Call a function to add 4 sp³ orbitals
+        console.log('Performing sp³ hybridization...');
+    } else if (option === '3 sp² hybrid and 1 p') {
+        // Call a function to add 3 sp² and 1 p orbital
+        console.log('Performing sp² hybridization...');
+    } else if (option === '2 sp hybrid and 2 p') {
+        // Call a function to add 2 sp and 2 p orbitals
+        console.log('Performing sp hybridization...');
+    }
+    // Add similar conditions for other options
+}
 
 
-
+//for texting only delet later.
+/*
 addAtom();
 addSOrbital();
 addPOrbital();
 addPOrbital();
 addPOrbital();
-        
+*/      
 
 // Render Function
 function render() {
