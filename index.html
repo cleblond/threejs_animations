@@ -17,7 +17,29 @@
     		
 	}
 	
-	
+	.icon-button {
+        width: 110px;
+        height: 32px;
+        background-size: contain;
+        background-repeat: no-repeat;
+        background-position: right;
+        border: none;
+        cursor: pointer;
+        text-align: left;
+    }
+    .p-orbital {
+        background-image: url('images/p_orbital.png');
+    }
+    .s-orbital {
+        background-image: url('images/s_orbital.png');
+    }
+	.atom {
+        background-image: url('images/atom.png');
+    }
+    
+    .hybrid {
+        background-image: url('images/hybrid.png');
+    }
 
 	
     </style>
@@ -27,10 +49,10 @@
     <div id="container">
         <div id="controls" style="position: absolute; top: 10px; left: 10px; z-index: 10;">
 
-	    <button onclick="addAtom()">Add Atom (C)</button>
-	    <button onclick="addSOrbital()">Add s Orbital</button>
-	    <button onclick="addPOrbital()">Add p Orbital</button>
-	    <button onclick="hybridizeOrbitals()">Hybridize</button>
+	    <button class="icon-button atom" onclick="addAtom()">Add Atom</button>
+	    <button class="icon-button s-orbital" onclick="addSOrbital()">Add s Orbital</button>
+	    <button class="icon-button p-orbital" onclick="addPOrbital()">Add p Orbital</button>
+	    <button class="icon-button hybrid" onclick="hybridizeOrbitals()">Hybridize</button>
 	</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -39,7 +61,7 @@
 
 	<div id="hybridizationModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
 	    padding: 20px; background: white; border: 1px solid #ccc; border-radius: 8px; z-index: 1000; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">
-	    <h3>Choose Hybridization</h3>
+	    <h3 id="message"></h3>
 	    <div id="options"></div>
 	    <button onclick="closeModal()">Cancel</button>
 	</div>

@@ -6,6 +6,13 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 
+//
+let isDragging = false;
+let dragStartX = 0;
+renderer.domElement.addEventListener("pointerdown", onPointerDown);
+renderer.domElement.addEventListener("pointermove", onPointerMove);
+renderer.domElement.addEventListener("pointerup", onPointerUp);
+
 // OrbitControls for 3D rotation
 let controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -31,14 +38,15 @@ camera.position.z = 5;
 // Add Atom Function
 function addAtom() {
 
-    let geometry = new THREE.SphereGeometry(atomRadius, 32, 32);
+    if(atoms.length == 2) return;
+    let geometry = new THREE.SphereGeometry(atomRadius, 16, 16);
     let material = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
     let atom = new THREE.Mesh(geometry, material);
     
     if (atoms.length == 0) {
     	atom.position.set(0, 0, 0);
     } else if (atoms.length == 1) {
-    	atom.position.set(2, 0, 0);
+    	atom.position.set(2.5, 0, 0);
     }
 
     //atom.position.set(x, y, z);
@@ -54,28 +62,125 @@ function addAtom() {
 function addSOrbital() {
     if (!currentAtom) return;
         
-    let geometry = new THREE.SphereGeometry(0.4, 16, 16);
+    let geometry = new THREE.SphereGeometry(0.3, 8, 8);
     let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
     let sOrbital = new THREE.Mesh(geometry, material);
     sOrbital.position.copy(currentAtom.position);
     sOrbital.name = "s_orbital"; // Set name property
-    sOrbital.atom = currentAtom.name; // Set name property
+    sOrbital.parentAtom = currentAtom.name; // Set name property
+    
+    sOrbital.originalColor = new THREE.Color(material.color);
+    
+    // Compute the bounding box
+    sOrbital.geometry.computeBoundingSphere();
+    sOrbital.updateMatrixWorld();
+    
+    
+    
     scene.add(sOrbital);
     render();
 }
 
+function updateBoundingBoxes() {
+    scene.children.forEach(mesh => {
+        if (mesh.isMesh && mesh.geometry.boundingBox) {
+            mesh.geometry.computeBoundingBox();
+            mesh.updateMatrixWorld();
+        }
+    });
+}
+//mesh.geometry.computeBoundingBox();
+//mesh.updateMatrixWorld();
+//const boundingBox = mesh.geometry.boundingBox.clone().applyMatrix4(mesh.matrixWorld);
 
-// Mouse event listener for selecting atoms
-function onMouseDown(event) {
-    // Calculate mouse position in normalized device coordinates (-1 to +1)
-    
-    if (event.target !== renderer.domElement) {
-        console.log("Click outside canvas detected.");
-        return;
+const intersectingOrbitals = new Set();
+function detectOrbitalIntersections() {
+    const orbitals = scene.children.filter(obj => obj.name === "p_orbital" || obj.name === "s_orbital");
+    const newIntersections = new Set();
+
+    for (let i = 0; i < orbitals.length; i++) {
+        const sphere1 = orbitals[i].geometry.boundingSphere.clone();
+        sphere1.center.applyMatrix4(orbitals[i].matrixWorld);
+
+        for (let j = i + 1; j < orbitals.length; j++) {
+            const sphere2 = orbitals[j].geometry.boundingSphere.clone();
+            sphere2.center.applyMatrix4(orbitals[j].matrixWorld);
+
+            const distance = sphere1.center.distanceTo(sphere2.center);
+            const radiusSum = sphere1.radius + sphere2.radius;
+
+            if (distance <= radiusSum) {
+              if (orbitals[i].parentAtom !== orbitals[j].parentAtom) {
+                //console.log(`Intersection detected between ${orbitals[i].parentAtom} and ${orbitals[j].parentAtom}`);
+
+                newIntersections.add(orbitals[i]);
+                newIntersections.add(orbitals[j]);
+
+                orbitals[i].material.color.set(0x000000);
+                orbitals[j].material.color.set(0x000000);
+
+
+                /*
+                const overlapMidpoint = orbitals[i].position.clone().lerp(orbitals[j].position, 0.5);
+                const overlapGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+                const overlapMaterial = new THREE.MeshBasicMaterial({ color: 0xffff00, transparent: true, opacity: 0.5 });
+                const overlapRegion = new THREE.Mesh(overlapGeometry, overlapMaterial);
+                overlapRegion.position.copy(overlapMidpoint);
+                scene.add(overlapRegion);
+                */
+                
+                // Optional: visualize or trigger events here
+              }
+            }
+        }
     }
     
     
-    //console.log("mouse down");
+    // Reset colors for orbitals no longer intersecting
+    intersectingOrbitals.forEach(orbital => {
+        if (!newIntersections.has(orbital)) {
+            orbital.material.color.copy(orbital.originalColor); // Default color (red)
+        }
+    });
+
+    // Update the global intersection tracking set
+    intersectingOrbitals.clear();
+    newIntersections.forEach(orbital => intersectingOrbitals.add(orbital));
+    
+    
+    
+    
+}
+
+/*
+function detectOrbitalIntersections() {
+    //updateBoundingBoxes();
+    const orbitals = scene.children.filter(obj => obj.name === "p_orbital" || obj.name === "s_orbital");
+
+    for (let i = 0; i < orbitals.length; i++) {
+        const sphere1 = orbitals[i].geometry.boundingBox.clone().applyMatrix4(orbitals[i].matrixWorld);
+
+        for (let j = i + 1; j < orbitals.length; j++) {
+            const sphere2 = orbitals[j].geometry.boundingBox.clone().applyMatrix4(orbitals[j].matrixWorld);
+
+            if (box1.intersectsBox(box2)) {
+                if (orbitals[i].parentAtom !== orbitals[j].parentAtom) {
+                console.log(`Intersection detected between ${orbitals[i].parentAtom} and ${orbitals[j].parentAtom}`);
+                // Perform actions here (e.g., visualize overlap or trigger events)
+                
+                }
+                
+            }
+        }
+    }
+}
+*/
+
+
+// Mouse event listener for selecting atoms
+function onPointerDown(event) {
+    // Calculate mouse position in normalized device coordinates (-1 to +1)
+
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 
@@ -87,6 +192,9 @@ function onMouseDown(event) {
 
     if (intersects.length > 0) {
         // If an atom is clicked, select it
+        
+        console.log(selectedAtom);
+        
         if (selectedAtom) {
             // Reset the material of the previously selected atom
             //FFF59D
@@ -97,12 +205,51 @@ function onMouseDown(event) {
         selectedAtom.material.color.set(0xFFF59D); // Highlight the selected atom
         currentAtom = selectedAtom;
 
+        isDragging = true;
+        dragStartX = event.clientX;
+
+        // Disable OrbitControls
+        controls.enabled = false;
         //console.log("Selected Atom:", selectedAtom.position);
     }
 }
 
 
-renderer.domElement.addEventListener("pointerdown", onMouseDown);        
+function onPointerMove(event) {
+    if (!isDragging || !selectedAtom) return;
+
+        //if (isDragging) {
+        detectOrbitalIntersections();
+    //}
+
+
+    // Calculate the change in mouse x position
+    const deltaX = (event.clientX - dragStartX) * 0.01; // Scale to scene units
+    dragStartX = event.clientX;
+
+    // Update the atom's position along the x-axis
+    selectedAtom.position.x += deltaX;
+
+    // Update associated orbitals
+    const associatedOrbitals = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
+    associatedOrbitals.forEach(orbital => {
+        orbital.position.x += deltaX;
+    });
+
+    render();
+}
+
+function onPointerUp() {
+    if (isDragging) {
+        isDragging = false;
+        //selectedAtom = null; // Clear the selected atom
+        
+        controls.enabled = true;
+        
+    }
+}
+
+//renderer.domElement.addEventListener("pointerdown", onMouseDown);        
         
 
 
@@ -126,18 +273,19 @@ function createPOrbitalLobe(lobecolor, scaleFactor = 1) {
     
 
     // Create LatheGeometry by revolving the profile curve
-    const geometry = new THREE.LatheGeometry(points, 32); // 32 segments for smoothness
-
+    const geometry = new THREE.LatheGeometry(points, 8); // 32 segments for smoothness
+    geometry.scale(scaleFactor, scaleFactor, scaleFactor); // Apply scaling to the entire geometry
     const material = new THREE.MeshBasicMaterial({ color: lobecolor, wireframe: true });
     const lobe = new THREE.Mesh(geometry, material);
-    lobe.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    //lobe.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    lobe.originalColor = new THREE.Color(lobecolor);
 
 
     return lobe;
 }
 
 
-
+/*
 function setPOrbitalPosition(position, anglerotation, axisrotation, color, scalefactor=1) {
 
     if (!currentAtom) return;
@@ -190,17 +338,163 @@ function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, a
 
     render();
 }
+*/
+
+function setPOrbitalPosition(position, anglerotation, axisrotation, color, scalefactor = 1) {
+    if (!currentAtom) return;
+
+    // Create the orbital geometry
+    const pLobe1 = createPOrbitalLobe(color, scalefactor);
+
+    // Transform the geometry to apply the rotation first, then translation
+    const geometry = pLobe1.geometry;
+    const positions = geometry.attributes.position.array;
+
+    // Apply rotation and translation to each vertex
+    for (let i = 0; i < positions.length; i += 3) {
+        let x = positions[i];
+        let y = positions[i + 1];
+        let z = positions[i + 2];
+
+        // Apply the rotation (around the specified axis)
+        if (axisrotation === "x") {
+            const yNew = y * Math.cos(anglerotation) - z * Math.sin(anglerotation);
+            const zNew = y * Math.sin(anglerotation) + z * Math.cos(anglerotation);
+            y = yNew;
+            z = zNew;
+        } else if (axisrotation === "y") {
+            const xNew = x * Math.cos(anglerotation) + z * Math.sin(anglerotation);
+            const zNew = -x * Math.sin(anglerotation) + z * Math.cos(anglerotation);
+            x = xNew;
+            z = zNew;
+        } else if (axisrotation === "z") {
+            const xNew = x * Math.cos(anglerotation) - y * Math.sin(anglerotation);
+            const yNew = x * Math.sin(anglerotation) + y * Math.cos(anglerotation);
+            x = xNew;
+            y = yNew;
+        }
+
+        // Apply translation (move to atom position)
+        positions[i] = x + currentAtom.position.x;
+        positions[i + 1] = y + currentAtom.position.y;
+        positions[i + 2] = z + currentAtom.position.z;
+    }
+
+    // Update geometry
+    //geometry.attributes.position.needsUpdate = true;
+    geometry.computeBoundingSphere();
+    //geometry.computeVertexNormals();
+
+    // Associate the orbital with the parent atom
+    pLobe1.name = "p_orbital";
+    pLobe1.parentAtom = currentAtom.name;
+    
+    //update bounding box
+    //pLobe1.geometry.computeBoundingSphere();
+    pLobe1.updateMatrixWorld();
+
+
+    // Add to the scene
+    scene.add(pLobe1);
+    render();
+}
+
+
+function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2, color, scalefactor = 1) {
+    if (!currentAtom) return;
+
+    // Create the orbital geometry
+    const pLobe1 = createPOrbitalLobe(color, scalefactor);
+
+    // Transform the geometry to the desired rotations first, then apply translation
+    const geometry = pLobe1.geometry;
+    const positions = geometry.attributes.position.array;
+
+    // Apply rotations and translation to each vertex
+    for (let i = 0; i < positions.length; i += 3) {
+        let x = positions[i];
+        let y = positions[i + 1];
+        let z = positions[i + 2];
+
+        // First rotation (around the first axis)
+        if (axisrotation1 === "x") {
+            const yNew = y * Math.cos(anglerotation1) - z * Math.sin(anglerotation1);
+            const zNew = y * Math.sin(anglerotation1) + z * Math.cos(anglerotation1);
+            y = yNew;
+            z = zNew;
+        } else if (axisrotation1 === "y") {
+            const xNew = x * Math.cos(anglerotation1) + z * Math.sin(anglerotation1);
+            const zNew = -x * Math.sin(anglerotation1) + z * Math.cos(anglerotation1);
+            x = xNew;
+            z = zNew;
+        } else if (axisrotation1 === "z") {
+            const xNew = x * Math.cos(anglerotation1) - y * Math.sin(anglerotation1);
+            const yNew = x * Math.sin(anglerotation1) + y * Math.cos(anglerotation1);
+            x = xNew;
+            y = yNew;
+        }
+
+        // Second rotation (around the second axis)
+        if (axisrotation2 === "x") {
+            const yNew = y * Math.cos(anglerotation2) - z * Math.sin(anglerotation2);
+            const zNew = y * Math.sin(anglerotation2) + z * Math.cos(anglerotation2);
+            y = yNew;
+            z = zNew;
+        } else if (axisrotation2 === "y") {
+            const xNew = x * Math.cos(anglerotation2) + z * Math.sin(anglerotation2);
+            const zNew = -x * Math.sin(anglerotation2) + z * Math.cos(anglerotation2);
+            x = xNew;
+            z = zNew;
+        } else if (axisrotation2 === "z") {
+            const xNew = x * Math.cos(anglerotation2) - y * Math.sin(anglerotation2);
+            const yNew = x * Math.sin(anglerotation2) + y * Math.cos(anglerotation2);
+            x = xNew;
+            y = yNew;
+        }
+
+        // Apply translation (move to atom position)
+        positions[i] = x + currentAtom.position.x;
+        positions[i + 1] = y + currentAtom.position.y;
+        positions[i + 2] = z + currentAtom.position.z;
+    }
+
+    // Update geometry
+    //geometry.attributes.position.needsUpdate = true;
+    geometry.computeBoundingSphere();
+    //geometry.computeVertexNormals();
+
+    // Associate the orbital with the parent atom
+    pLobe1.name = "p_orbital";
+    pLobe1.parentAtom = currentAtom.name;
+    
+    //update bounding box
+    //pLobe1.geometry.computeBoundingBox();
+    pLobe1.updateMatrixWorld();
+    
+
+    // Add to the scene
+    scene.add(pLobe1);
+    render();
+}
 
 
 function addPOrbital() {
     if (!currentAtom /*|| pOrbitalCount >= 3*/) return;
-    if (!selectedAtom) {selectedAtom = currentAtom;}
+    
+    //if(selectedAtom){
+    console.log("selectedAtom:", JSON.parse(JSON.stringify(selectedAtom)));
+    //}
+    
+    console.log("currentAtom:", currentAtom.name);
+    
+    
+    if (selectedAtom) {currentAtom = selectedAtom;}
     
     //console.log(selectedAtom.name);
     
     //console.log(scene.children);
     
-    const OrbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
+    const OrbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === currentAtom.name);
     //console.log(OrbitalsOnAtom);
     const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
     //console.log(totalpOrbitalsOnAtom);
@@ -212,14 +506,14 @@ function addPOrbital() {
     const pLobe2 = createPOrbitalLobe();
 
     
-    const x = selectedAtom.position.x;
-    const y = selectedAtom.position.y;
-    const z = selectedAtom.position.z;
+    const x = currentAtom.position.x;
+    const y = currentAtom.position.y;
+    const z = currentAtom.position.z;
 
     pLobe1.name = "p_orbital";
     pLobe2.name = "p_orbital";
-    pLobe1.atom = selectedAtom.name;
-    pLobe2.atom = selectedAtom.name;
+    pLobe1.atom = currentAtom.name;
+    pLobe2.atom = currentAtom.name;
 
 
     // Position and rotate the lobes along the appropriate axis
@@ -309,23 +603,27 @@ async function hybridizeOrbitals() {
 
    //console.log(JSON.parse(JSON.stringify(scene.children)));
    
+   console.log(currentAtom);
+   
     if (!selectedAtom) {selectedAtom = currentAtom;}
    
    
     const orbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
     const totalpOrbitalsOnAtom = orbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
 
-    console.log(totalpOrbitalsOnAtom);
+    //console.log(totalpOrbitalsOnAtom);
 
     
-    const userSelection = await showHybridizationModal(totalpOrbitalsOnAtom);
+    const userSelection = await showHybridizationModal(totalpOrbitalsOnAtom, orbitalsOnAtom.length-totalpOrbitalsOnAtom);
     
-    console.log(userSelection);
+    //console.log(userSelection);
     
 
     // Remove existing orbitals before hybridizing
-    scene.children = scene.children.filter(obj => obj.name !== "p_orbital");
-    scene.children = scene.children.filter(obj => obj.name !== "s_orbital");
+    //scene.children = scene.children.filter(obj => obj.name !== "p_orbital");
+    //scene.children = scene.children.filter(obj => obj.name !== "s_orbital");
+    
+    scene.children = scene.children.filter(obj => obj.parentAtom !== selectedAtom.name);
     
     const x = selectedAtom.position.x;
     const y = selectedAtom.position.y;
@@ -437,8 +735,18 @@ async function hybridizeOrbitals() {
 
 
     }
+    
+
+    
 
     render();
+    
+    if (selectedAtom.name == "atom1") {
+        reflectOrbitals();
+    
+    }
+    
+    
 }
 
 // Function to create hybrid orbitals
@@ -451,38 +759,53 @@ function addHybridOrbital(direction) {
 }
 
 
-function showHybridizationModal(totalpOrbitals) {
+function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
 
   return new Promise((resolve) => {
     const modal = document.getElementById('hybridizationModal');
     const optionsDiv = document.getElementById('options');
+    const messageHTML = document.getElementById('message');
     optionsDiv.innerHTML = ''; // Clear existing options
-
-    console.log(totalpOrbitals);
+    var message = '';
+    console.log(totalpOrbitals, sOrbitalPresent);
 
     let options = [];
-    if (totalpOrbitals === 3) {
-            options = [
-                { label: '4 sp³ hybrid', value: '4sp3' },
-                { label: '3 sp² hybrid and 1 p', value: '3sp2_1p' },
-                { label: '2 sp hybrid and 2 p', value: '2sp_2p' }
-            ];
     
-        //options = ['4 sp³ hybrid', '3 sp² hybrid and 1 p', '2 sp hybrid and 2 p'];
-    } else if (totalpOrbitals === 2) {
-        //options = ['3 sp² hybrid', '2 sp hybrid and 1 p'];
-            options = [
-                { label: '3 sp² hybrid', value: '3sp2' },
-                { label: '2 sp hybrid and 1 p', value: '2sp_1p' }
-            ];
-
+    if (sOrbitalPresent) {
+        if (totalpOrbitals === 3) {
+                options = [
+                    { label: '4 sp³ hybrid', value: '4sp3' },
+                    { label: '3 sp² hybrid and 1 p', value: '3sp2_1p' },
+                    { label: '2 sp hybrid and 2 p', value: '2sp_2p' }
+                ];
+                
+                message =  "Select a hybridization scheme for the one s orbital and three p orbitals.";
+        
+            //options = ['4 sp³ hybrid', '3 sp² hybrid and 1 p', '2 sp hybrid and 2 p'];
+        } else if (totalpOrbitals === 2) {
+            //options = ['3 sp² hybrid', '2 sp hybrid and 1 p'];
+                options = [
+                    { label: '3 sp² hybrid', value: '3sp2' },
+                    { label: '2 sp hybrid and 1 p', value: '2sp_1p' }
+                ];
+                message =  "Select a hybridization scheme for the one s orbital and two p orbitals.";
+        
+        
+        } else if (totalpOrbitals === 1) {
+            //options = ['2 sp hybrid'];
+                options = [{ label: '2 sp hybrid', value: '2sp' }];
+                message =  "This atom has one s orbital and one p orbital. You can form two sp hybrid orbitals.";
+        
+        } else if (totalpOrbitals === 0) {
+        
+                message =  "There are no orbitals on this atom to hybridize! Please add an s orbital and one or more p orbitals first.";
+        }
+    } else {
     
-    
-    } else if (totalpOrbitals === 1) {
-        //options = ['2 sp hybrid'];
-            options = [{ label: '2 sp hybrid', value: '2sp' }];
-    
+                message = "This atom has no s orbital. Please add an s orbital first.";
     }
+
+    console.log(message);
 
     // Dynamically add buttons for each option
     options.forEach(option => {
@@ -494,8 +817,9 @@ function showHybridizationModal(totalpOrbitals) {
             handleHybridizationSelection(option);
         };
         optionsDiv.appendChild(button);
+        
     });
-
+    messageHTML.innerText = message;
     modal.style.display = 'block';
 
   });
@@ -506,6 +830,24 @@ function closeModal() {
     const modal = document.getElementById('hybridizationModal');
     modal.style.display = 'none';
 }
+
+
+function findAlignedOrbitals(atom1, atom2, orbitalsAtom1, orbitalsAtom2) {
+    const alignedPairs = [];
+    orbitalsAtom1.forEach(orbital1 => {
+        const direction1 = orbital1.position.clone().sub(atom1.position).normalize();
+        orbitalsAtom2.forEach(orbital2 => {
+            const direction2 = orbital2.position.clone().sub(atom2.position).normalize();
+            const dotProduct = direction1.dot(direction2);
+            if (Math.abs(dotProduct) > alignmentThreshold) {
+                alignedPairs.push({ orbital1, orbital2 });
+            }
+        });
+    });
+    return alignedPairs;
+}
+
+
 
 function handleHybridizationSelection(option) {
     console.log('User selected:', option);
@@ -524,6 +866,67 @@ function handleHybridizationSelection(option) {
     }
     // Add similar conditions for other options
 }
+
+
+function reflectOrbitals() {
+    if (!selectedAtom) {
+        console.log("No atom selected to reflect orbitals.");
+        return;
+    }
+
+    // Find all orbitals associated with the selected atom
+    const associatedOrbitals = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
+    //console.log("Associated Orbitals:", associatedOrbitals);
+
+    if (associatedOrbitals.length === 0) {
+        console.log("No orbitals found for the selected atom.");
+        return;
+    }
+
+    // Reflect each orbital through the atom's center
+    const atomPosition = selectedAtom.position.clone();
+
+    associatedOrbitals.forEach(orbital => {
+        if (!orbital.geometry || !(orbital.geometry instanceof THREE.BufferGeometry)) {
+            console.log("Orbital does not have a BufferGeometry.");
+            return;
+        }
+
+        const geometry = orbital.geometry;
+        const positions = geometry.attributes.position.array;
+
+        for (let i = 0; i < positions.length; i += 3) {
+            // Original vertex position
+            const vx = positions[i];
+            const vy = positions[i + 1];
+            const vz = positions[i + 2];
+
+            // Reflect the vertex relative to the atom's center
+            positions[i] = 2 * atomPosition.x - vx; // Reflect x
+            positions[i + 1] = 2 * atomPosition.y - vy; // Reflect y
+            positions[i + 2] = 2 * atomPosition.z - vz; // Reflect z
+
+            // Debugging log
+            //console.log("Original Vertex:", { x: vx, y: vy, z: vz });
+            /*console.log("Reflected Vertex:", {
+                x: positions[i],
+                y: positions[i + 1],
+                z: positions[i + 2],
+            });
+            */
+        }
+
+        // Mark geometry for update
+        geometry.attributes.position.needsUpdate = true;
+        geometry.computeBoundingSphere();
+        geometry.computeVertexNormals();
+    });
+
+    //console.log("Reflected orbitals for atom:", selectedAtom.name);
+    //render();
+}
+
+
 
 
 //for texting only delet later.
