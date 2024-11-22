@@ -18,6 +18,8 @@
 	}
 	
 	.icon-button {
+	    display: block;
+        margin-top: 5px;
         width: 110px;
         height: 32px;
         background-size: contain;
@@ -53,6 +55,8 @@
 	    <button class="icon-button s-orbital" onclick="addSOrbital()">Add s Orbital</button>
 	    <button class="icon-button p-orbital" onclick="addPOrbital()">Add p Orbital</button>
 	    <button class="icon-button hybrid" onclick="hybridizeOrbitals()">Hybridize</button>
+
+	    <button class="icon-button" onclick="removeAllObjects()">Clear Scene</button>
 	</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
