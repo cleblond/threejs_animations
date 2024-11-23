@@ -19,6 +19,8 @@ controls.enableDamping = true;
 controls.dampingFactor = 0.1;  // Make damping more responsive
 controls.rotateSpeed = 0.5;    // Increase rotation speed for better responsiveness
 
+let hybridAtomCounter = 0; // Global counter
+
 
 // Raycaster setup
 const raycaster = new THREE.Raycaster();
@@ -54,13 +56,78 @@ function addAtom() {
     }
 
     //atom.position.set(x, y, z);
-    atom.name = "atom"+atoms.length;
+    atom.name = 'atom'+atoms.length;
     scene.add(atom);
     atoms.push(atom);
 
     currentAtom = atom;
     render();
 }
+
+function addAtomsToSp3Axes(centerAtom, distance = 2) {
+    if (!centerAtom) return;
+
+    // Tetrahedral direction vectors (normalized)
+    const directions = [
+        new THREE.Vector3(1, 0, 0), // Along positive x-axis
+        new THREE.Vector3(-1 / 3, Math.sqrt(8 / 9), 0), // In the xy-plane
+        new THREE.Vector3(-1 / 3, -Math.sqrt(2 / 9), Math.sqrt(2 / 3)), // Out of xy-plane
+        new THREE.Vector3(-1 / 3, -Math.sqrt(2 / 9), -Math.sqrt(2 / 3)), // Out of xy-plane
+    ];
+
+    const atomslen = atoms.length;
+    directions.forEach((direction, index) => {
+        // Calculate position for the new atom
+        const position = direction.clone().multiplyScalar(distance).add(centerAtom.position);
+
+        // Create and place a new atom
+        const atomGeometry = new THREE.SphereGeometry(atomRadius, 16, 16);
+        const atomMaterial = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 }); // Yellow for new atoms
+        const atom = new THREE.Mesh(atomGeometry, atomMaterial);
+
+        atom.axis = direction.clone().normalize();
+        atom.position.copy(position);
+        atom.name = `${centerAtom.name}_sp3_hybrid_atom${hybridAtomCounter++}`;
+        scene.add(atom);
+        atoms.push(atom);
+    });
+
+    render();
+}
+
+
+
+function addAtomsToSp2Axes(centerAtom, distance = 2) {
+    if (!centerAtom) return;
+
+    // Trigonal planar direction vectors (normalized)
+    const directions = [
+        new THREE.Vector3(1, 0, 0), // Along positive x-axis
+        new THREE.Vector3(-0.5, 0, Math.sqrt(3) / 2), // 120° in the xz-plane
+        new THREE.Vector3(-0.5, 0, -Math.sqrt(3) / 2), // -120° in the xz-plane
+    ];
+
+    directions.forEach((direction, index) => {
+        // Calculate position for the new atom
+        const position = direction.clone().multiplyScalar(distance).add(centerAtom.position);
+
+        // Create and place a new atom
+        const atomGeometry = new THREE.SphereGeometry(0.2, 16, 16);
+        const atomMaterial = new THREE.MeshBasicMaterial({ color: 0x99ccff }); // Light blue for new atoms
+        const atom = new THREE.Mesh(atomGeometry, atomMaterial);
+
+        atom.axis = direction.clone().nomralize();
+        atom.position.copy(position);
+        atom.name = `${centerAtom.name}_sp2_hybrid_atom${hybridAtomCounter++}`;
+
+        scene.add(atom);
+    });
+
+    render();
+}
+
+
+
 
 // Add s Orbital Function
 function addSOrbital() {
@@ -193,28 +260,50 @@ function onPointerDown(event) {
 
     // Check for intersections
     const intersects = raycaster.intersectObjects(atoms);
-
+console.log("Intersects:", intersects);
     if (intersects.length > 0) {
         // If an atom is clicked, select it
-        
-        console.log(selectedAtom);
-        
-        if (selectedAtom) {
-            // Reset the material of the previously selected atom
-            //FFF59D
-            selectedAtom.material.color.set(0xa2b9c4);
+        const intersected = intersects[0].object;
+            console.log(selectedAtom);
+            
+        if (intersected.name.startsWith("atom") || intersected.name.includes("_hybrid_atom")) {
+            console.log("Selected:", intersected.name);
+
+            // Reset previous selection if any
+            if (selectedAtom) {
+                selectedAtom.material.color.set(0xa2b9c4); // Reset to default color
+            }
+
+            // Highlight the newly selected atom
+            selectedAtom = intersected;
+            selectedAtom.material.color.set(0xFFF59D); // Highlight color
+
+            // Update `currentAtom` to the selected one
+            currentAtom = selectedAtom;
+
+            // Log associated orbitals
+            const associatedOrbitals = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
+            console.log("Associated Orbitals:", associatedOrbitals);
         }
+            
+            
+            
+           /* if (selectedAtom) {
+                // Reset the material of the previously selected atom
+                //FFF59D
+                selectedAtom.material.color.set(0xa2b9c4);
+            }*/
 
-        selectedAtom = intersects[0].object; // Get the first intersected object
-        selectedAtom.material.color.set(0xFFF59D); // Highlight the selected atom
-        currentAtom = selectedAtom;
+            selectedAtom = intersects[0].object; // Get the first intersected object
+            selectedAtom.material.color.set(0xFFF59D); // Highlight the selected atom
+            currentAtom = selectedAtom;
 
-        isDragging = true;
-        dragStartX = event.clientX;
+            isDragging = true;
+            dragStartX = event.clientX;
 
-        // Disable OrbitControls
-        controls.enabled = false;
-        //console.log("Selected Atom:", selectedAtom.position);
+            // Disable OrbitControls
+            controls.enabled = false;
+            //console.log("Selected Atom:", selectedAtom.position);
     }
 }
 
@@ -231,13 +320,22 @@ function onPointerMove(event) {
     const deltaX = (event.clientX - dragStartX) * 0.01; // Scale to scene units
     dragStartX = event.clientX;
 
+    const dragAxis = selectedAtom.axis || new THREE.Vector3(1, 0, 0); //
+ // Determine the axis to move along
+    // Invert direction only if the axis is not the default X-axis
+    const scalar = dragAxis.equals(new THREE.Vector3(1, 0, 0)) ? deltaX : -deltaX;
+    const constrainedDelta = dragAxis.clone().multiplyScalar(scalar);
+
+    // Update the atom's position along the constrained axis
+    selectedAtom.position.add(constrainedDelta);
     // Update the atom's position along the x-axis
-    selectedAtom.position.x += deltaX;
+    //selectedAtom.position.x += deltaX;
 
     // Update associated orbitals
     const associatedOrbitals = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
     associatedOrbitals.forEach(orbital => {
-        orbital.position.x += deltaX;
+        //orbital.position.x += deltaX;
+        orbital.position.add(constrainedDelta);
     });
 
     render();
@@ -768,7 +866,7 @@ async function hybridizeOrbitals() {
 		
 		
 		addSp3Axes(selectedAtom);
-		
+		addAtomsToSp3Axes(selectedAtom, distance = 2);
 		
         }
         
@@ -820,6 +918,7 @@ async function hybridizeOrbitals() {
 
     render();
     
+    
     if (selectedAtom.name == "atom1") {
         reflectOrbitals();
     
@@ -828,6 +927,8 @@ async function hybridizeOrbitals() {
     
 }
 
+
+/*
 // Function to create hybrid orbitals
 function addHybridOrbital(direction) {
     const hybridLobe = createHybridOrbitalLobe();
@@ -835,8 +936,11 @@ function addHybridOrbital(direction) {
     hybridLobe.lookAt(currentAtom.position); // Orient toward atom
     hybridLobe.name = "orbital"; // Tag as orbital for filtering
     scene.add(hybridLobe);
+    
+    
+    
 }
-
+*/
 
 function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
 
