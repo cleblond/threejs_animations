@@ -6,9 +6,15 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
 
+const undoStack = [];
+const redoStack = [];
+
+let isRotating = false; 
+
 //
 let isDragging = false;
 let dragStartX = 0;
+let dragStartY = 0;
 renderer.domElement.addEventListener("pointerdown", onPointerDown);
 renderer.domElement.addEventListener("pointermove", onPointerMove);
 renderer.domElement.addEventListener("pointerup", onPointerUp);
@@ -60,6 +66,13 @@ function addAtom() {
     atom.axis = new THREE.Vector3(1, 0, 0);
     scene.add(atom);
     atoms.push(atom);
+    
+        // Push the action to the undo stack
+    undoStack.push({
+        type: "atom",
+        objectType: "atom",
+        object: atom,
+    });
     
 
     currentAtom = atom;
@@ -165,6 +178,12 @@ function addAtomsToSp2Axes(centerAtom, distance = 2) {
 // Add s Orbital Function
 function addSOrbital() {
     if (!currentAtom) return;
+    
+    //check if current atom has an s
+    const numOfS = scene.children.filter(obj => obj.parentAtom === currentAtom.name && obj.name === "s_orbital").length;
+    if (numOfS == 1) return;
+    
+    const orbitals = scene.children.filter(obj => obj.name === "p_orbital" || obj.name === "s_orbital");
         
     let geometry = new THREE.SphereGeometry(0.3, 8, 8);
     let material = new THREE.MeshBasicMaterial({ color: 0x00ff00, wireframe: true });
@@ -179,7 +198,11 @@ function addSOrbital() {
     sOrbital.geometry.computeBoundingSphere();
     sOrbital.updateMatrixWorld();
     
-    
+    undoStack.push({
+        type: "s_orbital",
+        //objectType: "s_orbital",
+        object: sOrbital,
+    });
     
     scene.add(sOrbital);
     render();
@@ -293,7 +316,9 @@ function onPointerDown(event) {
 
     // Check for intersections
     const intersects = raycaster.intersectObjects(atoms);
-console.log("Intersects:", intersects);
+    console.log("Intersects:", intersects);
+    
+    
     if (intersects.length > 0) {
         // If an atom is clicked, select it
         const intersected = intersects[0].object;
@@ -320,35 +345,41 @@ console.log("Intersects:", intersects);
             console.log("Associated Orbitals:", associatedOrbitals);
         }
             
-            
-            
-           /* if (selectedAtom) {
-                // Reset the material of the previously selected atom
-                //FFF59D
-                selectedAtom.material.color.set(0xa2b9c4);
-            }*/
+
 
             selectedAtom = intersects[0].object; // Get the first intersected object
             selectedAtom.material.color.set(0xFFF59D); // Highlight the selected atom
             currentAtom = selectedAtom;
 
             isDragging = true;
+            controls.enabled = false;
             dragStartX = event.clientX;
 
-            // Disable OrbitControls
-            controls.enabled = false;
-            //console.log("Selected Atom:", selectedAtom.position);
     }
+    
+    
+    if  (dragMode === "rotate") {
+    
+        isDragging = true;
+        controls.enabled = false;
+    }
+
+    
+    
 }
 
+let dragMode = null; // Modes: "move" or "rotate"
 
 function onPointerMove(event) {
-    if (!isDragging || !selectedAtom) return;
+
+   //if (!isDragging || !selectedAtom) return;
+   if (!selectedAtom) return;
+   if (!isDragging ) return;
 
         //if (isDragging) {
         detectOrbitalIntersections();
     //}
-
+  if (dragMode === "move") {
 
     // Calculate the change in mouse x position
     const deltaX = (event.clientX - dragStartX) * 0.01; // Scale to scene units
@@ -373,9 +404,34 @@ function onPointerMove(event) {
     });
 
     render();
+    
+   } else if (dragMode === "rotate") {
+        console.log("rortate");
+        // Rotate Mode: Apply rotation based on mouse movement
+        const deltaX = event.clientX - dragStartX;
+        const deltaY = event.clientY - dragStartY;
+
+        const rotationAngleX = deltaY * 0.01; // Vertical drag -> rotation around X-axis
+        const rotationAngleY = deltaX * 0.01; // Horizontal drag -> rotation around Y-axis
+
+        rotateOrbitalsAndAxes(selectedAtom, selectedAtom.axis, rotationAngleX); // Rotate around X-axis
+        //rotateOrbitalsAndAxes(selectedAtom, new THREE.Vector3(0, 1, 0), rotationAngleY); // Rotate around Y-axis
+
+        // Update drag start positions for smooth rotation
+        dragStartX = event.clientX;
+        dragStartY = event.clientY;
+
+        render();
+   
+   
+   
+   }
 }
 
 function onPointerUp() {
+
+
+    console.log("POINTER UP");
     if (isDragging) {
         isDragging = false;
         //selectedAtom = null; // Clear the selected atom
@@ -556,10 +612,18 @@ function setPOrbitalPosition(position, anglerotation, axisrotation, color, scale
     //pLobe1.geometry.computeBoundingSphere();
     pLobe1.updateMatrixWorld();
 
+    //undoStack.push({
+    //    type: "add",
+    //    objectType: "p_orbital_lob",
+    //    object: pLobe1,
+    //});
 
     // Add to the scene
     scene.add(pLobe1);
+
     render();
+    
+    return pLobe1;
 }
 
 
@@ -638,11 +702,15 @@ function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, a
     // Add to the scene
     scene.add(pLobe1);
     render();
+    return pLobe1;
 }
 
 
 function addPOrbital() {
     if (!currentAtom /*|| pOrbitalCount >= 3*/) return;
+    
+    const addedObjects = [];
+    
     
     //if(selectedAtom){
     //console.log("selectedAtom:", JSON.parse(JSON.stringify(selectedAtom)));
@@ -653,12 +721,6 @@ function addPOrbital() {
     
     if (selectedAtom) {currentAtom = selectedAtom;}
 
-    //const atomAxis = currentAtom.axis ? currentAtom.axis.clone().normalize() : new THREE.Vector3(1, 0, 0);
-
-    
-    //const atomAxis = atom.axis ? atom.axis.clone().normalize() : new THREE.Vector3(1, 0, 0); // Default to x-axis if no axis is defined
-
-    
     const OrbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === currentAtom.name);
 
     const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
@@ -674,32 +736,8 @@ function addPOrbital() {
 
 
 
-    console.log(currentAtom);
+    //console.log(currentAtom);
 
-    // Generate a perpendicular direction using the cross product
-    //const arbitraryVector = new THREE.Vector3(0, 1, 0); // Arbitrary vector
-    //const perpendicular1 = new THREE.Vector3().crossVectors(atomAxis, arbitraryVector).normalize();
-    //const perpendicular2 = new THREE.Vector3().crossVectors(atomAxis, perpendicular1).normalize();
-    
-    
-    //console.log("Atom Axis:", atomAxis);
-    //console.log("Perpendicular1:", perpendicular1);
-    //console.log("Perpendicular2:", perpendicular2);
-    
-    
-    
-       // Create and position the p orbitals along the perpendicular directions
-    //const pLobe1 = createPOrbitalLobe(0xff0000); // Red lobe
-    //pLobe1.position.copy(currentAtom.position).add(perpendicular1.multiplyScalar(atomRadius + lengthpLobe));
-    //pLobe1.lookAt(currentAtom.position); // Orient toward the atom
-    //pLobe1.name = "p_orbital";
-    //pLobe1.parentAtom = currentAtom.name;
-
-
-    //pLobe2.position.copy(currentAtom.position).add(perpendicular1.multiplyScalar(atomRadius + lengthpLobe));
-    //pLobe2.lookAt(currentAtom.position); // Orient toward the atom
-    //pLobe2.name = "p_orbital";
-    //pLobe2.parentAtom = currentAtom.name;
 
 
 
@@ -708,21 +746,29 @@ function addPOrbital() {
     // Position and rotate the lobes along the appropriate axis
     if (totalpOrbitalsOnAtom === 0) { // Along the x-axis
 
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, true);
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, true);
+        addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, true), addedObjects);
+        addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, true), addedObjects);
         
     } else if (totalpOrbitalsOnAtom === 1) { // Along the y-axis
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000, 1, true);
+	addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000, 1, true), addedObjects);
 	//negative y
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff, 1, true);
+	addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff, 1, true), addedObjects);
         
         
     } else if (totalpOrbitalsOnAtom === 2) { // Along the z-axis
 	//positive z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x", 0xff0000, 1, true);
+	addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x", 0xff0000, 1, true), addedObjects);
 	//negative z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff, 1, true);
+	addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff, 1, true), addedObjects);
     }
+
+    undoStack.push({
+        type: "p_orbital",
+        atom: selectedAtom,
+        addedObjects: addedObjects
+    });
+
+
 
     render();
 }
@@ -750,7 +796,7 @@ function addAxes() {
     
     xAxis.name = "x-axis";
     scene.add(xAxis);
-    console.log(xAxis);
+    //console.log(xAxis);
     
     const hitbox = new THREE.Mesh(
         new THREE.CylinderGeometry(0.1, 0.1, length, 16), // Radius and height can be adjusted
@@ -768,7 +814,7 @@ function addAxes() {
     ]);
     const yAxis = new THREE.Line(yGeometry, yMaterial);
     
-    
+    yAxis.name = "y-axis";
     
     
     
@@ -781,12 +827,15 @@ function addAxes() {
         new THREE.Vector3(0, 0, axisLength)
     ]);
     const zAxis = new THREE.Line(zGeometry, zMaterial);
+    zAxis.name = "z-axis";
     scene.add(zAxis);
 
     // Add axis labels using sprites for simplicity
     addAxisLabel("X", axisLength, 0, 0, 0xff0000);
     addAxisLabel("Y", 0, axisLength, 0, 0x00ff00);
     addAxisLabel("Z", 0, 0, axisLength, 0x0000ff);
+    
+    
 }
 
 
@@ -808,7 +857,7 @@ function addAxisLabel(text, x, y, z, color) {
 
 
 
-function addSp2Axes(atom) {
+function addSp2Axes(atom, addedObjects = []) {
     if (!atom) return;
 
     // Trigonal planar direction vectors (normalized)
@@ -830,17 +879,27 @@ function addSp2Axes(atom) {
         // Optionally, tag the line for future reference
         line.name = "sp2_axis";
         line.parentAtom = atom.name;
+        line.axis = direction.clone().normalize(); 
 
         // Add to the scene
         scene.add(line);
+        
+        // Track the added object
+        if (addedObjects) {
+            addedObjects.push(line);
+        }
+        
+        
+        
     });
 
     render();
+    
 }
 
 
 
-function addSp3Axes(atom) {
+function addSp3Axes(atom, addedObjects = []) {
     if (!atom) return;
 
     // Tetrahedral direction vectors (normalized)
@@ -867,6 +926,13 @@ function addSp3Axes(atom) {
 
         // Add to the scene
         scene.add(line);
+        
+                // Track the added object
+        if (addedObjects) {
+            addedObjects.push(line);
+        }
+        
+        
     });
 
     render();
@@ -875,14 +941,19 @@ function addSp3Axes(atom) {
 
 
 
-
+function addAndTrackObject(object, addedObjects) {
+    addedObjects.push(object);
+    return object;
+}
 
 // Add Hybridize Button Functionality
 async function hybridizeOrbitals() {
 
    //console.log(JSON.parse(JSON.stringify(scene.children)));
    
-   console.log(currentAtom);
+   const addedObjects = [];
+   
+   //console.log(currentAtom);
    
     if (!selectedAtom) {selectedAtom = currentAtom;}
    
@@ -896,12 +967,18 @@ async function hybridizeOrbitals() {
     
     const userSelection = await showHybridizationModal(totalSOrbitalsOnAtom, totalPOrbitalsOnAtom);
     
-    //console.log(userSelection);
     
-
-    // Remove existing orbitals before hybridizing
-    //scene.children = scene.children.filter(obj => obj.name !== "p_orbital");
-    //scene.children = scene.children.filter(obj => obj.name !== "s_orbital");
+    const removedObjects = [];
+    scene.children.forEach(child => {
+        
+        if (child.parentAtom == selectedAtom.name) {
+            console.log("Object deleted:", child.name, "Parent Atom:", child.parentAtom);
+            removedObjects.push(child);
+        }
+        
+        
+        
+    });
     
     scene.children = scene.children.filter(obj => obj.parentAtom !== selectedAtom.name);
     
@@ -913,11 +990,12 @@ async function hybridizeOrbitals() {
     if (totalPOrbitalsOnAtom === 1) { //atmost (2)sp
         // sp Hybridization (linear, two orbitals at 180 degrees)
         if (userSelection == "2sp") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1,false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1,false), addedObjects); //blue
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, hybridscale, false);
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false);
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false), addedObjects); //red
+		
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, hybridscale, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false), addedObjects);
         }
         
         
@@ -929,29 +1007,30 @@ async function hybridizeOrbitals() {
         
         //(3) sp2 hybrid
         if (userSelection == "3sp2") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, 1); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, 1), addedObjects); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false), addedObjects);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, 1);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, 1), addedObjects);
 		
-		addSp2Axes(selectedAtom);
+		addAndTrackObject(addSp2Axes(selectedAtom), addedObjects);
+	    addSp2Axes(selectedAtom, addedObjects);
 		
         }
         
         //(2) sp2 hybrid and 1 p
         if (userSelection == "2sp_1p") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false), addedObjects); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, hybridscale, false), addedObjects); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false), addedObjects); //red
         }
         
         
@@ -964,20 +1043,20 @@ async function hybridizeOrbitals() {
         if (userSelection == "4sp3") {
         
 		// (3) sp³ Hybridization (tetrahedral, four orbitals at ~109.5 degrees)
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false), addedObjects); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0xff0000,  hybridscale, false);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0xff0000,  hybridscale, false), addedObjects);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -40*Math.PI/120, "x",  0xff0000,  hybridscale, false);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -40*Math.PI/120, "x",  0xff0000,  hybridscale, false), addedObjects);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", 40*Math.PI/120, "x",  0xff0000,  hybridscale, false);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", 40*Math.PI/120, "x",  0xff0000,  hybridscale, false), addedObjects);
 		
 		
-		addSp3Axes(selectedAtom);
+		addSp3Axes(selectedAtom, addedObjects);
 		//addAtomsToSp3Axes(selectedAtom, distance = 2);
 		
         }
@@ -986,39 +1065,39 @@ async function hybridizeOrbitals() {
         if (userSelection == "3sp2_1p") {
         
 		// (3) sp2 hybrid with (1) p
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false), addedObjects); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false), addedObjects);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, false);        
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false), addedObjects);
+		addAndTrackObject(setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, false), addedObjects);        
 		//non hybrid p orbital
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false), addedObjects); //red
 		
-		addSp2Axes(selectedAtom);
+		addSp2Axes(selectedAtom, addedObjects);
 		
         }
         
         if (userSelection == "2sp_2p") {
         
 		// (2) sp hybrid with (2) p
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false), addedObjects); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000,  hybridscale, false), addedObjects); //red
 		
 		
 		//non hybrid p orbital along y
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false), addedObjects); //red
 		
 		//non hybrid p orbital along z
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0xff0000, 1, false); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "x", 0x0000ff, 1, false); //red
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0xff0000, 1, false), addedObjects); //blue
+		addAndTrackObject(setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "x", 0x0000ff, 1, false), addedObjects); //red
         
         }
 
@@ -1026,14 +1105,21 @@ async function hybridizeOrbitals() {
     }
     
 
-    
+    undoStack.push({
+        type: "hybridization",
+        atom: selectedAtom,
+        addedObjects: addedObjects,
+        removedObjects: removedObjects,
+    });
+
+   console.log("undoSTack in hybridize:", undoStack);
 
 
     
-    console.log(selectedAtom);
+    //console.log(selectedAtom);
     //const delatoms = scene.children.filter(obj => obj.name && obj.name.match(/^atom\d+$/));
     
-    const regex = /^atom(\d+)$/;
+    //const regex = /^atom(\d+)$/;
 
     
     /*
@@ -1052,7 +1138,7 @@ async function hybridizeOrbitals() {
     
     
     if (selectedAtom.name.includes("sp3_hybrid") || selectedAtom.name == "atom1") {
-        //reflectOrbitals();
+        reflectOrbitals();
     
     }
     
@@ -1088,7 +1174,7 @@ function showHybridizationModal(totalSOrbitals, totalPOrbitals) {
     const messageHTML = document.getElementById('message');
     optionsDiv.innerHTML = ''; // Clear existing options
     var message = '';
-    console.log(totalPOrbitals, totalSOrbitals);
+    //console.log(totalPOrbitals, totalSOrbitals);
 
     let options = [];
     
@@ -1126,7 +1212,7 @@ function showHybridizationModal(totalSOrbitals, totalPOrbitals) {
                 message = "This atom has no s orbital. Please add an s orbital first.";
     }
 
-    console.log(message);
+    //console.log(message);
 
     // Dynamically add buttons for each option
     options.forEach(option => {
@@ -1171,7 +1257,7 @@ function findAlignedOrbitals(atom1, atom2, orbitalsAtom1, orbitalsAtom2) {
 
 
 function handleHybridizationSelection(option) {
-    console.log('User selected:', option);
+    //console.log('User selected:', option);
     closeModal();
 
     // Perform hybridization based on the selected option
@@ -1203,7 +1289,7 @@ function reflectOrbitals() {
     const associatedObjs = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
 
     
-    console.log("Associated Orbitals:", associatedObjs);
+    //console.log("Associated Orbitals:", associatedObjs);
 
     if (associatedObjs.length === 0) {
         console.log("No orbitals found for the selected atom.");
@@ -1282,15 +1368,15 @@ function reflectOrbitals() {
 function removeAllObjects() {
     // Filter out all orbitals from the scene
     
-    console.log(JSON.parse(JSON.stringify(scene.children)));
+    //console.log(JSON.parse(JSON.stringify(scene.children)));
     const orbitals = scene.children.filter(obj => obj.name === "p_orbital" || obj.name === "s_orbital");
     const delatoms = scene.children.filter(obj => obj.name && obj.name.match(/^atom\d+$/));
     // Remove each orbital from the scene
     orbitals.forEach(orbital => scene.remove(orbital));
     delatoms.forEach(atom => scene.remove(atom));
     atoms = [];
-    console.log(atoms);
-    console.log(`${orbitals.length} orbitals removed.`);
+    //console.log(atoms);
+    //console.log(`${orbitals.length} orbitals removed.`);
     render(); // Update the scene
 }
 
@@ -1347,21 +1433,255 @@ let isAddAtomModeActive = false;
 
 // Function to toggle the state
 function toggleAddAtomMode() {
+    dragMode = "rotate";
     isAddAtomModeActive = !isAddAtomModeActive;
 
     // Update button appearance
     const button = document.getElementById("toggleAddAtomButton");
     button.textContent = isAddAtomModeActive ? "Add Atom Mode: ON" : "Add Atom Mode: OFF";
 
+    if (isAddAtomModeActive) {
+        setCanvasMessage("You are in atom add mode. Click an axis to add an atom to it.");
+    } else {
+        setCanvasMessage('');
+    }
+
+
     console.log("Add Atom Mode is now", isAddAtomModeActive ? "ACTIVE" : "INACTIVE");
 }
+
+
+let isRotateModeActive = false; // Track whether rotation mode is active
+
+function toggleRotateMode() {
+    isRotateModeActive = !isRotateModeActive; // Toggle rotation mode state
+
+    if (isRotateModeActive) {
+    
+        setCanvasMessage("You are in rotate mode. Click an atom and then use the mousewheel or click drag to rotate about its axis.");
+    
+        dragMode = "rotate"; // Set the drag mode to rotate
+        controls.enabled = false; // Disable OrbitControls
+        controls.enableZoom = false;
+        console.log("Rotation mode enabled.");
+    } else {
+        //dragMode = "move"; // Reset drag mode to move
+        controls.enabled = true; // Re-enable OrbitControls
+        controls.enableZoom = true;
+        console.log("Rotation mode disabled.");
+        setCanvasMessage();
+    }
+
+    // Update button text dynamically
+    const button = document.getElementById("rotateModeButton");
+    button.textContent = isRotateModeActive ? "Rotate Mode: ON" : "Rotate Mode: OFF";
+}
+
+
+
+function onMouseWheel(event) {
+    if (dragMode !== "rotate") return;
+    console.log(event);
+    if (!selectedAtom) return; // No atom selected
+
+    // Determine rotation angle based on wheel delta
+    const delta = event.deltaY > 0 ? -Math.PI / 36 : Math.PI / 36; // 5 degrees per scroll step
+
+    // Define the rotation axis (e.g., y-axis for now)
+    const rotationAxis = new THREE.Vector3(0, 1, 0); // Rotate around y-axis
+    rotateOrbitalsAndAxes(selectedAtom, selectedAtom.axis, delta);
+}
+
+window.addEventListener("wheel", onMouseWheel);
+
+
+
+function rotateOrbitalsAndAxes(atom, axis, angle) {
+    if (!atom) {
+        console.log("No atom provided for rotation.");
+        return;
+    }
+
+    // Normalize the rotation axis
+    const normalizedAxis = axis.clone().normalize();
+
+    // Collect associated objects (orbitals and axes)
+    const associatedObjects = scene.children.filter(obj => obj.parentAtom === atom.name);
+
+    if (associatedObjects.length === 0) {
+        console.log("No associated objects found for atom:", atom.name);
+        return;
+    }
+
+    // Create a rotation matrix
+    const rotationMatrix = new THREE.Matrix4();
+    rotationMatrix.makeRotationAxis(normalizedAxis, angle);
+
+    // Rotation origin (atom's position)
+    const origin = atom.position.clone();
+
+    // Rotate each associated object
+    associatedObjects.forEach(obj => {
+        console.log("Rotating object:", obj.name);
+
+        // Handle LatheGeometry vertices
+        if (obj.geometry && obj.geometry instanceof THREE.BufferGeometry) {
+            const positions = obj.geometry.attributes.position.array;
+
+            for (let i = 0; i < positions.length; i += 3) {
+                const vertex = new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]);
+
+                // Translate to the origin
+                vertex.sub(origin);
+
+                // Apply rotation
+                vertex.applyMatrix4(rotationMatrix);
+
+                // Translate back
+                vertex.add(origin);
+
+                // Update the vertex position
+                positions[i] = vertex.x;
+                positions[i + 1] = vertex.y;
+                positions[i + 2] = vertex.z;
+            }
+
+            // Mark geometry as needing an update
+            obj.geometry.attributes.position.needsUpdate = true;
+            obj.geometry.computeBoundingSphere(); // Optional: Recompute bounds
+        } else if (obj.position) {
+            // Handle objects with positions (e.g., axes)
+            obj.position.sub(origin);
+            obj.position.applyMatrix4(rotationMatrix);
+            obj.position.add(origin);
+        }
+
+        // Rotate axis direction if the object has one
+        if (obj.axis) {
+            obj.axis.applyMatrix4(rotationMatrix).normalize();
+        }
+    });
+
+    console.log(`Rotated ${associatedObjects.length} objects around axis:`, normalizedAxis);
+
+    render(); // Ensure the scene updates
+}
+
+/*
+
+function rotateOrbitalsAndAxes(atom, axis, angle) {
+    if (!atom) {
+        console.log("No central atom provided for rotation.");
+        return;
+    }
+
+    // Ensure the axis is normalized
+    const normalizedAxis = axis.clone().normalize();
+
+    // Collect orbitals and axes associated with the atom
+    const associatedObjects = scene.children.filter(
+        obj => obj.parentAtom === atom.name
+    );
+
+    if (associatedObjects.length === 0) {
+        console.log("No associated orbitals or axes found for atom:", atom.name);
+        return;
+    }
+
+    // Create a rotation matrix
+    const rotationMatrix = new THREE.Matrix4();
+    rotationMatrix.makeRotationAxis(normalizedAxis, angle);
+
+    // Central atom's position as the rotation origin
+    const origin = atom.position.clone();
+    console.log(JSON.parse(JSON.stringify(associatedObjects)));
+
+    
+    // Rotate each associated object
+    associatedObjects.forEach(obj => {
+        // Translate the object to the origin
+        obj.position.sub(origin);
+
+        // Apply the rotation matrix
+        obj.position.applyMatrix4(rotationMatrix);
+
+        // Translate the object back to its original position
+        obj.position.add(origin);
+
+        // Rotate the object's axis direction if it has one
+        if (obj.axis) {
+            obj.axis.applyMatrix4(rotationMatrix).normalize();
+        }
+    });
+    
+    
+    associatedObjects.forEach(obj => {
+    console.log("Before rotation:", obj.name, obj.position.clone());
+    obj.position.sub(origin); // Move to origin
+    obj.position.applyMatrix4(rotationMatrix); // Rotate
+    obj.position.add(origin); // Move back
+    console.log("After rotation:", obj.name, obj.position.clone());
+
+    if (obj.axis) {
+        console.log("Before axis rotation:", obj.name, obj.axis.clone());
+        obj.axis.applyMatrix4(rotationMatrix).normalize();
+        console.log("After axis rotation:", obj.name, obj.axis.clone());
+    }
+    });
+    
+    
+    
+
+    console.log(`Rotated ${associatedObjects.length} objects around axis:`, normalizedAxis);
+
+    render(); // Update the scene
+}
+*/
+
+/*
+// Enable Rotation Mode
+function enableRotationMode() {
+    dragMode = "rotate";
+    isRotating = true;
+    controls.enabled = false; // Disable OrbitControls
+    controls.enableZoom = false; // Temporarily disable zoom
+    //if (selectedAtom) {
+        //highlightSelectedAtom(selectedAtom); // Highlight the selected atom
+    //}
+    document.getElementById("rotateModeButton").textContent = "Disable Rotation Mode";
+    console.log("Rotation mode enabled.");
+}*/
+// Add toggle functionality to the button
+
+/*
+document.getElementById("rotateModeButton").addEventListener("click", () => {
+    if (isRotating) {
+        disableRotationMode();
+    } else {
+        enableRotationMode();
+    }
+});
+*/
+
+/*
+// Disable Rotation Mode
+function disableRotationMode() {
+    dragMode = null;
+    isRotating = false;
+    controls.enableZoom = true; // Re-enable zoom
+    controls.enabled = true; // Disable OrbitControls
+    //if (selectedAtom) {
+    //    resetHighlight(selectedAtom); // Reset atom highlight
+    //}
+    document.getElementById("rotateModeButton").textContent = "Enable Rotation Mode";
+    console.log("Rotation mode disabled.");
+}
+*/
 
 // Function to handle clicks on the scene
 function onSceneClick(event) {
     if (!isAddAtomModeActive) return; // Do nothing if mode is inactive
 
-
-    console.log(scene.children);
     // Raycast to detect clicked objects
     const mouse = new THREE.Vector2();
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
@@ -1376,7 +1696,7 @@ function onSceneClick(event) {
     if (intersects.length > 0) {
     
         console.log("Intersects array:", intersects);
-        const proximityThreshold = 0.1;
+        const proximityThreshold = 0.05;
         
 
         
@@ -1412,14 +1732,15 @@ function onSceneClick(event) {
                         axisDirection = new THREE.Vector3(1, 0, 0); // x-axis direction
                     } else if (clickedObject.name.includes("sp3_axis")) {
                     
-                        console.log(clickedObject);
+                        //console.log(clickedObject);
                         const centralAtom = scene.getObjectByName(clickedObject.parentAtom);
-                        console.log(centralAtom);
+                        //console.log(centralAtom);
                     
                         axisOrigin = centralAtom.position.clone(); // Central atom's position
                         axisDirection = clickedObject.axis.clone(); // Use the axis vector from the clicked object
                     } else if (clickedObject.name.includes("sp2_axis")) {
-                        axisOrigin = clickedObject.centralAtom.position.clone(); // Central atom for sp2
+                        const centralAtom = scene.getObjectByName(clickedObject.parentAtom);
+                        axisOrigin = centralAtom.position.clone(); // Central atom for sp2
                         axisDirection = clickedObject.axis.clone(); // Use the axis vector from the clicked object
                     }
                     
@@ -1449,6 +1770,10 @@ function onSceneClick(event) {
                         atoms.push(atom);
                         
                         scene.add(atom);
+                        console.log("Added atom:", atom.name, "on axis:", clickedObject.name);
+
+                        // Exit the loop and the function immediately
+                        return;
                     
                     
                     }
@@ -1469,14 +1794,125 @@ function onSceneClick(event) {
 
 // Utility function to calculate the closest point on an axis
 function calculateClosestPointOnAxis(point, axisOrigin, axisDirection) {
+
+    console.log(point, axisOrigin, axisDirection);
     const pointToOrigin = point.clone().sub(axisOrigin); // Vector from axis origin to point
+    console.log(pointToOrigin);
     const projection = pointToOrigin.clone().projectOnVector(axisDirection); // Project onto axis
     return axisOrigin.clone().add(projection); // Closest point on axis
 }
 
 
 
-window.addEventListener("click", onSceneClick);
+window.addEventListener("dblclick", onSceneClick);
+
+
+
+
+
+function undo() {
+
+    console.log("undoSTack:", undoStack); 
+
+    if (undoStack.length === 0) {
+        console.log("Nothing to undo.");
+        return;
+    }
+
+    const lastAction = undoStack.pop();
+    
+    console.log(lastAction);
+    
+    redoStack.push(lastAction); // Save the action to the redo stack
+
+    if (lastAction.type === "atom" || lastAction.type === "s_orbital") {
+        // Remove the object from the scene
+        scene.remove(lastAction.object);
+        console.log("Undid add action:", lastAction.object);
+        //atoms.pop();
+    } else if (lastAction.type === "delete") {
+        // Re-add the deleted object to the scene
+        scene.add(lastAction.object);
+        console.log("Undid delete action:", lastAction.object);
+    } else if (lastAction.type === "hybridization") {
+    
+        // Remove the added objects
+        lastAction.addedObjects.forEach(obj => {
+            scene.remove(obj);
+        });
+
+        // Re-add the removed objects
+        lastAction.removedObjects.forEach(obj => {
+            scene.add(obj);
+        });
+
+        console.log("Undid hybridization for atom:", lastAction.atom.name);
+    
+    
+    } else if (lastAction.type === "p_orbital") {
+    console.log(scene.children, atoms);
+            // Remove the added objects
+        lastAction.addedObjects.forEach(obj => {
+            scene.remove(obj);
+        });
+    
+    
+
+    }
+    render();
+}
+
+function redo() {
+    if (redoStack.length === 0) {
+        console.log("Nothing to redo.");
+        return;
+    }
+
+    const lastAction = redoStack.pop();
+    undoStack.push(lastAction); // Save the action to the undo stack
+
+    if (lastAction.type === "atom" || lastAction.type === "s_orbital") {
+        // Re-add the object to the scene
+        scene.add(lastAction.object);
+        console.log("Redid add action:", lastAction.object);
+    } else if (lastAction.type === "delete") {
+        // Remove the object from the scene
+        scene.remove(lastAction.object);
+        console.log("Redid delete action:", lastAction.object);
+    } else if (lastAction.type === "hybridization") {
+    
+        // Remove the re-added objects
+        lastAction.removedObjects.forEach(obj => {
+            scene.remove(obj);
+        });
+
+        // Re-add the hybridized objects
+        lastAction.addedObjects.forEach(obj => {
+            scene.add(obj);
+        });
+
+        console.log("Redid hybridization for atom:", lastAction.atom.name);
+    
+    
+    } else if (lastAction.type === "p_orbital") {
+    console.log(scene.children, atoms);
+            // Remove the added objects
+        lastAction.addedObjects.forEach(obj => {
+            scene.add(obj);
+        });
+    
+    
+
+    }
+    
+    
+    
+
+    render();
+}
+
+
+
 
 // Add the toggle button to the UI
 //const button = document.createElement("button");
@@ -1494,7 +1930,30 @@ window.addEventListener("click", onSceneClick);
 
 
 
+function setCanvasMessage(message) {
+    const messageDiv = document.getElementById("canvasMessage");
 
+    if (!message || message.trim() === "") {
+        // Fade out and hide after the specified duration
+        messageDiv.style.opacity = 0;
+        setTimeout(() => {
+            messageDiv.style.display = "none";
+        }, 500); // Match the CSS transition duration (500ms)
+    } else {
+        // Show the message div and update the text
+        messageDiv.style.display = "block";
+        messageDiv.style.opacity = 1; // Ensure it's fully visible
+        messageDiv.textContent = message;
+
+        // Automatically clear after a duration (optional)
+        if (duration > 0) {
+            setTimeout(() => setCanvasMessage(""), duration);
+        }
+    }
+    
+    
+    
+}
 
 
 
