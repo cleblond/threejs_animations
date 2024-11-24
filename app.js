@@ -57,8 +57,10 @@ function addAtom() {
 
     //atom.position.set(x, y, z);
     atom.name = 'atom'+atoms.length;
+    atom.axis = new THREE.Vector3(1, 0, 0);
     scene.add(atom);
     atoms.push(atom);
+    
 
     currentAtom = atom;
     render();
@@ -85,6 +87,7 @@ function addAtomsToSp3Axes(centerAtom, distance = 2) {
         const atomMaterial = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 }); // Yellow for new atoms
         const atom = new THREE.Mesh(atomGeometry, atomMaterial);
 
+        atom.parentAtom = selectedAtom.name;
         atom.axis = direction.clone().normalize();
         atom.position.copy(position);
         atom.name = `${centerAtom.name}_sp3_hybrid_atom${hybridAtomCounter++}`;
@@ -95,7 +98,37 @@ function addAtomsToSp3Axes(centerAtom, distance = 2) {
     render();
 }
 
+function addSp3Axes(atom) {
+    if (!atom) return;
 
+    // Tetrahedral direction vectors (normalized)
+    const directions = [
+        new THREE.Vector3(1, 0, 0), // Along positive x-axis
+        new THREE.Vector3(-1 / 3, Math.sqrt(8 / 9), 0), // In the xy-plane
+        new THREE.Vector3(-1 / 3, -Math.sqrt(2 / 9), Math.sqrt(2 / 3)), // Out of xy-plane
+        new THREE.Vector3(-1 / 3, -Math.sqrt(2 / 9), -Math.sqrt(2 / 3)), // Out of xy-plane
+    ];
+
+    // Line material
+    const lineMaterial = new THREE.LineBasicMaterial({ color: 0x000000 });
+
+    // Create axes
+    directions.forEach(direction => {
+        const end = direction.clone().multiplyScalar(axislength).add(atom.position); // Scale and offset
+        const lineGeometry = new THREE.BufferGeometry().setFromPoints([atom.position, end]);
+        const line = new THREE.Line(lineGeometry, lineMaterial);
+
+        // Optionally, tag the line for future reference
+        line.name = "sp3_axis";
+        line.parentAtom = atom.name;
+        line.axis = direction.clone().normalize();
+
+        // Add to the scene
+        scene.add(line);
+    });
+
+    render();
+}
 
 function addAtomsToSp2Axes(centerAtom, distance = 2) {
     if (!centerAtom) return;
@@ -264,7 +297,8 @@ console.log("Intersects:", intersects);
     if (intersects.length > 0) {
         // If an atom is clicked, select it
         const intersected = intersects[0].object;
-            console.log(selectedAtom);
+            console.log("Selected Atom:", selectedAtom);
+            console.log(scene.children);
             
         if (intersected.name.startsWith("atom") || intersected.name.includes("_hybrid_atom")) {
             console.log("Selected:", intersected.name);
@@ -356,7 +390,7 @@ function onPointerUp() {
 
 
 
-function createPOrbitalLobe(lobecolor, scaleFactor = 1) {
+function createPOrbitalLobe(lobecolor, axis, scaleFactor = 1, applyQuaternion = true) {
     // Define the profile curve as an array of Vector2 points
     
     const points = [];
@@ -376,12 +410,35 @@ function createPOrbitalLobe(lobecolor, scaleFactor = 1) {
 
     // Create LatheGeometry by revolving the profile curve
     const geometry = new THREE.LatheGeometry(points, 8); // 32 segments for smoothness
-    geometry.scale(scaleFactor, scaleFactor, scaleFactor); // Apply scaling to the entire geometry
+    //geometry.scale(scaleFactor, scaleFactor, scaleFactor); // Apply scaling to the entire geometry
     const material = new THREE.MeshBasicMaterial({ color: lobecolor, wireframe: true });
-    const lobe = new THREE.Mesh(geometry, material);
-    //lobe.scale.set(scaleFactor, scaleFactor, scaleFactor);
-    lobe.originalColor = new THREE.Color(lobecolor);
 
+    //lobe.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+    geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+    // Create a quaternion to rotate from y-axis to the axis
+    const lobe = new THREE.Mesh(geometry, material); 
+    if (applyQuaternion && axis) {
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(
+            new THREE.Vector3(0, 0, 0), // Default orientation of the lobe
+            axis.clone().normalize() // Target orientation
+        );
+        
+        console.log(quaternion);
+        
+        lobe.applyQuaternion(quaternion);
+    }
+    
+
+    
+
+    //
+    
+
+    
+    lobe.originalColor = new THREE.Color(lobecolor);
+    
+ // Apply scaling to the entire geometry
 
     return lobe;
 }
@@ -413,8 +470,8 @@ function setPOrbitalPosition(position, anglerotation, axisrotation, color, scale
     render();
 }
 
-
-
+*/
+/*
 function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2,  color, scalefactor=1) {
 
     if (!currentAtom) return;
@@ -442,11 +499,11 @@ function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, a
 }
 */
 
-function setPOrbitalPosition(position, anglerotation, axisrotation, color, scalefactor = 1) {
+function setPOrbitalPosition(position, anglerotation, axisrotation, color, scalefactor = 1, applyQuaternion = true) {
     if (!currentAtom) return;
 
     // Create the orbital geometry
-    const pLobe1 = createPOrbitalLobe(color, scalefactor);
+    const pLobe1 = createPOrbitalLobe(color, currentAtom.axis, scalefactor, applyQuaternion);
 
     // Transform the geometry to apply the rotation first, then translation
     const geometry = pLobe1.geometry;
@@ -491,6 +548,10 @@ function setPOrbitalPosition(position, anglerotation, axisrotation, color, scale
     pLobe1.name = "p_orbital";
     pLobe1.parentAtom = currentAtom.name;
     
+        // Apply rotation based on the axis
+    //pLobe.rotation[axisRotation] = angleRotation;
+    
+    
     //update bounding box
     //pLobe1.geometry.computeBoundingSphere();
     pLobe1.updateMatrixWorld();
@@ -502,11 +563,11 @@ function setPOrbitalPosition(position, anglerotation, axisrotation, color, scale
 }
 
 
-function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2, color, scalefactor = 1) {
+function setPOrbitalPosition2Rotation(position, anglerotation1, axisrotation1, anglerotation2, axisrotation2, color, scalefactor = 1, applyQuaternion = true) {
     if (!currentAtom) return;
 
     // Create the orbital geometry
-    const pLobe1 = createPOrbitalLobe(color, scalefactor);
+    const pLobe1 = createPOrbitalLobe(color, currentAtom.axis, scalefactor, applyQuaternion);
 
     // Transform the geometry to the desired rotations first, then apply translation
     const geometry = pLobe1.geometry;
@@ -584,57 +645,83 @@ function addPOrbital() {
     if (!currentAtom /*|| pOrbitalCount >= 3*/) return;
     
     //if(selectedAtom){
-    console.log("selectedAtom:", JSON.parse(JSON.stringify(selectedAtom)));
+    //console.log("selectedAtom:", JSON.parse(JSON.stringify(selectedAtom)));
     //}
     
-    console.log("currentAtom:", currentAtom.name);
+    //console.log("currentAtom:", currentAtom.name);
     
     
     if (selectedAtom) {currentAtom = selectedAtom;}
+
+    //const atomAxis = currentAtom.axis ? currentAtom.axis.clone().normalize() : new THREE.Vector3(1, 0, 0);
+
     
-    //console.log(selectedAtom.name);
-    
-    //console.log(scene.children);
+    //const atomAxis = atom.axis ? atom.axis.clone().normalize() : new THREE.Vector3(1, 0, 0); // Default to x-axis if no axis is defined
+
     
     const OrbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === currentAtom.name);
-    //console.log(OrbitalsOnAtom);
-    const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
-    //console.log(totalpOrbitalsOnAtom);
-    
 
-    //console.log(
+    const totalpOrbitalsOnAtom = OrbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
+
     // Create two lobes for the p orbital using the custom geometry function
-    const pLobe1 = createPOrbitalLobe();
-    const pLobe2 = createPOrbitalLobe();
+    //const pLobe1 = createPOrbitalLobe();
+    //const pLobe2 = createPOrbitalLobe();
 
     
     const x = currentAtom.position.x;
     const y = currentAtom.position.y;
     const z = currentAtom.position.z;
 
-    pLobe1.name = "p_orbital";
-    pLobe2.name = "p_orbital";
-    pLobe1.atom = currentAtom.name;
-    pLobe2.atom = currentAtom.name;
+
+
+    console.log(currentAtom);
+
+    // Generate a perpendicular direction using the cross product
+    //const arbitraryVector = new THREE.Vector3(0, 1, 0); // Arbitrary vector
+    //const perpendicular1 = new THREE.Vector3().crossVectors(atomAxis, arbitraryVector).normalize();
+    //const perpendicular2 = new THREE.Vector3().crossVectors(atomAxis, perpendicular1).normalize();
+    
+    
+    //console.log("Atom Axis:", atomAxis);
+    //console.log("Perpendicular1:", perpendicular1);
+    //console.log("Perpendicular2:", perpendicular2);
+    
+    
+    
+       // Create and position the p orbitals along the perpendicular directions
+    //const pLobe1 = createPOrbitalLobe(0xff0000); // Red lobe
+    //pLobe1.position.copy(currentAtom.position).add(perpendicular1.multiplyScalar(atomRadius + lengthpLobe));
+    //pLobe1.lookAt(currentAtom.position); // Orient toward the atom
+    //pLobe1.name = "p_orbital";
+    //pLobe1.parentAtom = currentAtom.name;
+
+
+    //pLobe2.position.copy(currentAtom.position).add(perpendicular1.multiplyScalar(atomRadius + lengthpLobe));
+    //pLobe2.lookAt(currentAtom.position); // Orient toward the atom
+    //pLobe2.name = "p_orbital";
+    //pLobe2.parentAtom = currentAtom.name;
+
+
+
 
 
     // Position and rotate the lobes along the appropriate axis
     if (totalpOrbitalsOnAtom === 0) { // Along the x-axis
 
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000);
-        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, true);
+        setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, true);
         
     } else if (totalpOrbitalsOnAtom === 1) { // Along the y-axis
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000);
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "x", 0xff0000, 1, true);
 	//negative y
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff);
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI, "z", 0x0000ff, 1, true);
         
         
     } else if (totalpOrbitalsOnAtom === 2) { // Along the z-axis
 	//positive z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x", 0xff0000);
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), Math.PI/2, "x", 0xff0000, 1, true);
 	//negative z
-	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff);
+	setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0x0000ff, 1, true);
     }
 
     render();
@@ -658,15 +745,34 @@ function addAxes() {
         new THREE.Vector3(0, 0, 0),
         new THREE.Vector3(axisLength, 0, 0)
     ]);
+    
     const xAxis = new THREE.Line(xGeometry, xMaterial);
+    
+    xAxis.name = "x-axis";
     scene.add(xAxis);
-
+    console.log(xAxis);
+    
+    const hitbox = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.1, 0.1, length, 16), // Radius and height can be adjusted
+        new THREE.MeshBasicMaterial({ visible: false }) // Invisible material
+    );
+    
+    
+    
+    
+    
     // Y-axis
     const yGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(0, 0, 0),
         new THREE.Vector3(0, axisLength, 0)
     ]);
     const yAxis = new THREE.Line(yGeometry, yMaterial);
+    
+    
+    
+    
+    
+    
     scene.add(yAxis);
 
     // Z-axis
@@ -682,6 +788,24 @@ function addAxes() {
     addAxisLabel("Y", 0, axisLength, 0, 0x00ff00);
     addAxisLabel("Z", 0, 0, axisLength, 0x0000ff);
 }
+
+
+// Function to add a text label at a given position
+function addAxisLabel(text, x, y, z, color) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    context.font = "32px Arial";
+    context.fillStyle = "#" + color.toString(16).padStart(6, '0');
+    context.fillText(text, 0, 64); // Draw text on canvas
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(spriteMaterial);
+    sprite.position.set(x, y, z);
+    //sprite.scale.set(0.5, 0.5, 0.5); // Adjust size
+    scene.add(sprite);
+}
+
 
 
 function addSp2Axes(atom) {
@@ -739,6 +863,7 @@ function addSp3Axes(atom) {
         // Optionally, tag the line for future reference
         line.name = "sp3_axis";
         line.parentAtom = atom.name;
+        line.axis = direction.clone().normalize(); 
 
         // Add to the scene
         scene.add(line);
@@ -749,21 +874,7 @@ function addSp3Axes(atom) {
 
 
 
-// Function to add a text label at a given position
-function addAxisLabel(text, x, y, z, color) {
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    context.font = "32px Arial";
-    context.fillStyle = "#" + color.toString(16).padStart(6, '0');
-    context.fillText(text, 0, 64); // Draw text on canvas
 
-    const texture = new THREE.CanvasTexture(canvas);
-    const spriteMaterial = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(spriteMaterial);
-    sprite.position.set(x, y, z);
-    //sprite.scale.set(0.5, 0.5, 0.5); // Adjust size
-    scene.add(sprite);
-}
 
 
 // Add Hybridize Button Functionality
@@ -777,12 +888,13 @@ async function hybridizeOrbitals() {
    
    
     const orbitalsOnAtom = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
-    const totalpOrbitalsOnAtom = orbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
+    const totalPOrbitalsOnAtom = orbitalsOnAtom.filter(obj => obj.name === 'p_orbital').length/2;
+    const totalSOrbitalsOnAtom = orbitalsOnAtom.filter(obj => obj.name === 's_orbital').length;
 
     //console.log(totalpOrbitalsOnAtom);
 
     
-    const userSelection = await showHybridizationModal(totalpOrbitalsOnAtom, orbitalsOnAtom.length-totalpOrbitalsOnAtom);
+    const userSelection = await showHybridizationModal(totalSOrbitalsOnAtom, totalPOrbitalsOnAtom);
     
     //console.log(userSelection);
     
@@ -798,33 +910,33 @@ async function hybridizeOrbitals() {
     const z = selectedAtom.position.z;
     
 
-    if (totalpOrbitalsOnAtom === 1) { //atmost (2)sp
+    if (totalPOrbitalsOnAtom === 1) { //atmost (2)sp
         // sp Hybridization (linear, two orbitals at 180 degrees)
         if (userSelection == "2sp") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1,false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, hybridscale);
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff);
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, hybridscale, false);
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false);
         }
         
         
         
         
-    } else if (totalpOrbitalsOnAtom === 2) {//(3)sp2 or (2)sp / (1)p
+    } else if (totalPOrbitalsOnAtom === 2) {//(3)sp2 or (2)sp / (1)p
         // sp² Hybridization (trigonal planar, three orbitals at 120 degrees)
 
         
         //(3) sp2 hybrid
         if (userSelection == "3sp2") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, 1); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, 1);
 		
 		addSp2Axes(selectedAtom);
 		
@@ -832,41 +944,41 @@ async function hybridizeOrbitals() {
         
         //(2) sp2 hybrid and 1 p
         if (userSelection == "2sp_1p") {
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, hybridscale, false); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
         }
         
         
         
         
         
-    } else if (totalpOrbitalsOnAtom === 3) {//(4) sp3 or (3)sp2 / (1)p or (2)sp / (2)p  
+    } else if (totalPOrbitalsOnAtom === 3) {//(4) sp3 or (3)sp2 / (1)p or (2)sp / (2)p  
         
         
         if (userSelection == "4sp3") {
         
 		// (3) sp³ Hybridization (tetrahedral, four orbitals at ~109.5 degrees)
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 0, 0,  0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -107*Math.PI/120, "z", 0, 0,  0xff0000,  hybridscale, false);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -40*Math.PI/120, "x",  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", 80*Math.PI/120, "x", 0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", -40*Math.PI/120, "x",  0xff0000,  hybridscale, false);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", 40*Math.PI/120, "x",  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), 13*Math.PI/120, "z", -80*Math.PI/120, "x", 0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), -13*Math.PI/120, "z", 40*Math.PI/120, "x",  0xff0000,  hybridscale, false);
 		
 		
 		addSp3Axes(selectedAtom);
-		addAtomsToSp3Axes(selectedAtom, distance = 2);
+		//addAtomsToSp3Axes(selectedAtom, distance = 2);
 		
         }
         
@@ -874,17 +986,17 @@ async function hybridizeOrbitals() {
         if (userSelection == "3sp2_1p") {
         
 		// (3) sp2 hybrid with (1) p
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000, hybridscale, false); //red
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", Math.PI/3, "y",  0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -2*Math.PI/3, "y",  0xff0000,  hybridscale, false);
 		
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff);
-		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale);        
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", -Math.PI/3, "y",  0x0000ff, 1, false);
+		setPOrbitalPosition2Rotation(new THREE.Vector3(x, y, z), +Math.PI/2, "z", +2*Math.PI/3, "y",  0xff0000,  hybridscale, false);        
 		//non hybrid p orbital
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
 		
 		addSp2Axes(selectedAtom);
 		
@@ -893,20 +1005,20 @@ async function hybridizeOrbitals() {
         if (userSelection == "2sp_2p") {
         
 		// (2) sp hybrid with (2) p
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
 		
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000,  hybridscale); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "z", 0xff0000,  hybridscale, false); //red
 		
 		
 		//non hybrid p orbital along y
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), 0, "z", 0x0000ff, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI, "z", 0xff0000, 1, false); //red
 		
 		//non hybrid p orbital along z
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0xff0000); //blue
-		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "x", 0x0000ff); //red
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), -Math.PI/2, "x", 0xff0000, 1, false); //blue
+		setPOrbitalPosition(new THREE.Vector3(x, y, z), +Math.PI/2, "x", 0x0000ff, 1, false); //red
         
         }
 
@@ -916,14 +1028,40 @@ async function hybridizeOrbitals() {
 
     
 
-    render();
+
+    
+    console.log(selectedAtom);
+    //const delatoms = scene.children.filter(obj => obj.name && obj.name.match(/^atom\d+$/));
+    
+    const regex = /^atom(\d+)$/;
+
+    
+    /*
+    if (regex.test(selectedAtom.name)) {
+        // Extract the number part and check if it's odd
+        const match = selectedAtom.name.match(regex); // Extract the match
+        const number = parseInt(match[1], 10); // Get the numeric part
+        if (number % 2 === 1) { // Check if it's odd
+            console.log("The name matches 'atom' with an odd number.");
+            
+            reflectOrbitals();
+            
+        } 
+    } 
+    */
     
     
-    if (selectedAtom.name == "atom1") {
-        reflectOrbitals();
+    if (selectedAtom.name.includes("sp3_hybrid") || selectedAtom.name == "atom1") {
+        //reflectOrbitals();
     
     }
     
+    
+    
+    
+    
+    
+    render(); 
     
 }
 
@@ -942,7 +1080,7 @@ function addHybridOrbital(direction) {
 }
 */
 
-function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
+function showHybridizationModal(totalSOrbitals, totalPOrbitals) {
 
   return new Promise((resolve) => {
     const modal = document.getElementById('hybridizationModal');
@@ -950,12 +1088,12 @@ function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
     const messageHTML = document.getElementById('message');
     optionsDiv.innerHTML = ''; // Clear existing options
     var message = '';
-    console.log(totalpOrbitals, sOrbitalPresent);
+    console.log(totalPOrbitals, totalSOrbitals);
 
     let options = [];
     
-    if (sOrbitalPresent) {
-        if (totalpOrbitals === 3) {
+    if (totalSOrbitals) {
+        if (totalPOrbitals === 3) {
                 options = [
                     { label: '4 sp³ hybrid', value: '4sp3' },
                     { label: '3 sp² hybrid and 1 p', value: '3sp2_1p' },
@@ -965,7 +1103,7 @@ function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
                 message =  "Select a hybridization scheme for the one s orbital and three p orbitals.";
         
             //options = ['4 sp³ hybrid', '3 sp² hybrid and 1 p', '2 sp hybrid and 2 p'];
-        } else if (totalpOrbitals === 2) {
+        } else if (totalPOrbitals === 2) {
             //options = ['3 sp² hybrid', '2 sp hybrid and 1 p'];
                 options = [
                     { label: '3 sp² hybrid', value: '3sp2' },
@@ -974,12 +1112,12 @@ function showHybridizationModal(totalpOrbitals, sOrbitalPresent) {
                 message =  "Select a hybridization scheme for the one s orbital and two p orbitals.";
         
         
-        } else if (totalpOrbitals === 1) {
+        } else if (totalPOrbitals === 1) {
             //options = ['2 sp hybrid'];
                 options = [{ label: '2 sp hybrid', value: '2sp' }];
                 message =  "This atom has one s orbital and one p orbital. You can form two sp hybrid orbitals.";
         
-        } else if (totalpOrbitals === 0) {
+        } else if (totalPOrbitals === 0) {
         
                 message =  "There are no orbitals on this atom to hybridize! Please add an s orbital and one or more p orbitals first.";
         }
@@ -1056,61 +1194,95 @@ function reflectOrbitals() {
         console.log("No atom selected to reflect orbitals.");
         return;
     }
+    
+    
+    
+    
 
-    // Find all orbitals associated with the selected atom
-    const associatedOrbitals = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
-    //console.log("Associated Orbitals:", associatedOrbitals);
+    // Find all orbitals and atoms associated with the selected atom
+    const associatedObjs = scene.children.filter(obj => obj.parentAtom === selectedAtom.name);
 
-    if (associatedOrbitals.length === 0) {
+    
+    console.log("Associated Orbitals:", associatedObjs);
+
+    if (associatedObjs.length === 0) {
         console.log("No orbitals found for the selected atom.");
         return;
     }
 
     // Reflect each orbital through the atom's center
     const atomPosition = selectedAtom.position.clone();
+    
+    
+     // Reflect all associated atoms
+    const associatedAtoms = scene.children.filter(obj =>
+        obj.parentAtom === selectedAtom.name && obj.name.includes("sp3_hybrid")
+    );
+
+    associatedAtoms.forEach(atom => {
+        if (atom.position) {
+            // Reflect atom position
+            atom.position.x = 2 * atomPosition.x - atom.position.x;
+            atom.position.y = 2 * atomPosition.y - atom.position.y;
+            atom.position.z = 2 * atomPosition.z - atom.position.z;
+
+            console.log("Reflected Atom:", atom.name, "New Position:", atom.position);
+        }
+    });
+    
+    
+    // Reflect all associated orbitals
+    const associatedOrbitals = scene.children.filter(obj =>
+        obj.parentAtom === selectedAtom.name && !obj.name.includes("sp3_hybrid")
+    );
 
     associatedOrbitals.forEach(orbital => {
-        if (!orbital.geometry || !(orbital.geometry instanceof THREE.BufferGeometry)) {
-            console.log("Orbital does not have a BufferGeometry.");
-            return;
+        /*
+        if (orbital.position) {
+            // Reflect orbital position (global space)
+            orbital.position.x = 1 * atomPosition.x - orbital.position.x;
+            orbital.position.y = 1 * atomPosition.y - orbital.position.y;
+            orbital.position.z = 1 * atomPosition.z - orbital.position.z;
+
+            console.log("Reflected Orbital Position:", orbital.name, orbital.position);
         }
+        */
 
-        const geometry = orbital.geometry;
-        const positions = geometry.attributes.position.array;
+        if (orbital.geometry && orbital.geometry instanceof THREE.BufferGeometry) {
+            const geometry = orbital.geometry;
+            const positions = geometry.attributes.position.array;
 
-        for (let i = 0; i < positions.length; i += 3) {
-            // Original vertex position
-            const vx = positions[i];
-            const vy = positions[i + 1];
-            const vz = positions[i + 2];
+            for (let i = 0; i < positions.length; i += 3) {
+                // Get vertex position in global space
+                const globalVertexX = orbital.position.x + positions[i];
+                const globalVertexY = orbital.position.y + positions[i + 1];
+                const globalVertexZ = orbital.position.z + positions[i + 2];
 
-            // Reflect the vertex relative to the atom's center
-            positions[i] = 2 * atomPosition.x - vx; // Reflect x
-            positions[i + 1] = 2 * atomPosition.y - vy; // Reflect y
-            positions[i + 2] = 2 * atomPosition.z - vz; // Reflect z
+                // Reflect vertex globally
+                const reflectedGlobalX = 2 * atomPosition.x - globalVertexX;
+                const reflectedGlobalY = 2 * atomPosition.y - globalVertexY;
+                const reflectedGlobalZ = 2 * atomPosition.z - globalVertexZ;
 
-            // Debugging log
-            //console.log("Original Vertex:", { x: vx, y: vy, z: vz });
-            /*console.log("Reflected Vertex:", {
-                x: positions[i],
-                y: positions[i + 1],
-                z: positions[i + 2],
-            });
-            */
+                // Convert back to local space
+                positions[i] = reflectedGlobalX - orbital.position.x;
+                positions[i + 1] = reflectedGlobalY - orbital.position.y;
+                positions[i + 2] = reflectedGlobalZ - orbital.position.z;
+            }
+
+            // Update geometry
+            geometry.attributes.position.needsUpdate = true;
+            geometry.computeBoundingSphere();
+            geometry.computeVertexNormals();
         }
-
-        // Mark geometry for update
-        geometry.attributes.position.needsUpdate = true;
-        geometry.computeBoundingSphere();
-        geometry.computeVertexNormals();
     });
-
     //console.log("Reflected orbitals for atom:", selectedAtom.name);
     //render();
 }
 
 function removeAllObjects() {
     // Filter out all orbitals from the scene
+    
+    console.log(JSON.parse(JSON.stringify(scene.children)));
     const orbitals = scene.children.filter(obj => obj.name === "p_orbital" || obj.name === "s_orbital");
     const delatoms = scene.children.filter(obj => obj.name && obj.name.match(/^atom\d+$/));
     // Remove each orbital from the scene
@@ -1121,6 +1293,209 @@ function removeAllObjects() {
     console.log(`${orbitals.length} orbitals removed.`);
     render(); // Update the scene
 }
+
+
+function deleteSelectedAtomAndAssociatedObjects() {
+    if (!selectedAtom) {
+        console.log("No atom selected to delete.");
+        return;
+    }
+
+    // Log the selected atom for debugging
+    console.log("Deleting selected atom:", selectedAtom.name);
+
+    // Find and delete all associated orbitals and sp3 hybrid atoms
+    const objectsToDelete = scene.children.filter(obj =>
+        obj.parentAtom === selectedAtom.name || // Associated orbitals
+        obj.name.includes(selectedAtom.name + "_sp3_hybrid") // Associated sp3 hybrid atoms
+    );
+
+    // Add the selected atom itself to the list of objects to delete
+    objectsToDelete.push(selectedAtom);
+
+    // Remove all objects from the scene
+    objectsToDelete.forEach(obj => {
+        console.log("Deleting object:", obj.name);
+        scene.remove(obj);
+    });
+
+    // Remove any axes related to the atom (assuming axes have identifiable names or properties)
+    const axesToDelete = scene.children.filter(obj => 
+        obj.name && obj.name.includes(selectedAtom.name + "_axis")
+    );
+
+    axesToDelete.forEach(axis => {
+        console.log("Deleting axis:", axis.name);
+        scene.remove(axis);
+    });
+
+    // Reset the selectedAtom to null
+    selectedAtom = null;
+
+    // Re-render the scene
+    render();
+
+            console.log(scene.children);
+
+    console.log("Deleted selected atom and all associated objects.");
+}
+
+
+
+// Toggle state to track whether the mode is active
+let isAddAtomModeActive = false;
+
+// Function to toggle the state
+function toggleAddAtomMode() {
+    isAddAtomModeActive = !isAddAtomModeActive;
+
+    // Update button appearance
+    const button = document.getElementById("toggleAddAtomButton");
+    button.textContent = isAddAtomModeActive ? "Add Atom Mode: ON" : "Add Atom Mode: OFF";
+
+    console.log("Add Atom Mode is now", isAddAtomModeActive ? "ACTIVE" : "INACTIVE");
+}
+
+// Function to handle clicks on the scene
+function onSceneClick(event) {
+    if (!isAddAtomModeActive) return; // Do nothing if mode is inactive
+
+
+    console.log(scene.children);
+    // Raycast to detect clicked objects
+    const mouse = new THREE.Vector2();
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(mouse, camera);
+
+    // Intersect with all objects in the scene
+    const intersects = raycaster.intersectObjects(scene.children);
+
+    if (intersects.length > 0) {
+    
+        console.log("Intersects array:", intersects);
+        const proximityThreshold = 0.1;
+        
+
+        
+        //const clickedObject = intersects[0].object;
+        
+        
+        
+        
+        for (const intersect of intersects) {
+        
+                const clickedObject = intersect.object;
+                // Check if the clicked object is a hybrid axis or x-axis
+                if (
+                    
+                
+                    clickedObject.name.includes("sp3_axis") ||
+                    clickedObject.name.includes("sp2_axis") ||
+                    clickedObject.name.includes("x-axis")
+                ) {
+                    console.log("Clicked on axis:", clickedObject.name);            
+                    console.log(atoms);
+                    
+                    //const axisOrigin = clickedObject.position || new THREE.Vector3(0, 0, 0); // Default position
+                    //const axisDirection = clickedObject.axis || new THREE.Vector3(1, 0, 0); // Default to x-axis
+
+
+
+                    
+                    let axisOrigin, axisDirection;
+                    
+                    if (clickedObject.name.includes("x-axis")) {
+                        axisOrigin = new THREE.Vector3(0, 0, 0); // x-axis origin at (0,0,0)
+                        axisDirection = new THREE.Vector3(1, 0, 0); // x-axis direction
+                    } else if (clickedObject.name.includes("sp3_axis")) {
+                    
+                        console.log(clickedObject);
+                        const centralAtom = scene.getObjectByName(clickedObject.parentAtom);
+                        console.log(centralAtom);
+                    
+                        axisOrigin = centralAtom.position.clone(); // Central atom's position
+                        axisDirection = clickedObject.axis.clone(); // Use the axis vector from the clicked object
+                    } else if (clickedObject.name.includes("sp2_axis")) {
+                        axisOrigin = clickedObject.centralAtom.position.clone(); // Central atom for sp2
+                        axisDirection = clickedObject.axis.clone(); // Use the axis vector from the clicked object
+                    }
+                    
+
+                    //const axisOrigin = closestPointOnAxis || new THREE.Vector3(0, 0, 0); // Default position
+                    const clickedPoint = intersect.point; // Exact click position
+                    const closestPointOnAxis = calculateClosestPointOnAxis(clickedPoint, axisOrigin, axisDirection);
+                    
+                    const distanceToAxis = clickedPoint.distanceTo(closestPointOnAxis);
+ 
+                    if (distanceToAxis <= proximityThreshold) {
+                    
+                       console.log(`Close enough to axis: ${clickedObject.name}, distance: ${distanceToAxis}`);
+
+                         //if(atoms.length == 2) return;
+                        let geometry = new THREE.SphereGeometry(atomRadius, 16, 16);
+                        let material = new THREE.MeshBasicMaterial({ color: 0xa2b9c4 });
+                        let atom = new THREE.Mesh(geometry, material);
+                        
+                        //atom.position.set(x, y, z);
+                        atom.name = 'atom'+atoms.length;
+                        atom.axis = clickedObject.axis;
+                        
+                        
+                        atom.position.copy(closestPointOnAxis);
+                        
+                        atoms.push(atom);
+                        
+                        scene.add(atom);
+                    
+                    
+                    }
+                    
+                    
+                   
+
+                }
+
+            
+        }
+        
+
+
+    }
+}
+
+
+// Utility function to calculate the closest point on an axis
+function calculateClosestPointOnAxis(point, axisOrigin, axisDirection) {
+    const pointToOrigin = point.clone().sub(axisOrigin); // Vector from axis origin to point
+    const projection = pointToOrigin.clone().projectOnVector(axisDirection); // Project onto axis
+    return axisOrigin.clone().add(projection); // Closest point on axis
+}
+
+
+
+window.addEventListener("click", onSceneClick);
+
+// Add the toggle button to the UI
+//const button = document.createElement("button");
+//button.id = "toggleAddAtomButton";
+//button.textContent = "Add Atom Mode: OFF";
+//button.style.position = "absolute";
+//button.style.top = "10px";
+//button.style.left = "10px";
+//button.addEventListener("click", toggleAddAtomMode);
+//const controlDiv = document.getElementById('controls');
+
+//controlDiv.appendChild(button);
+
+// Add the click event listener for the scene
+
+
+
+
+
 
 
 //for texting only delet later.
@@ -1134,6 +1509,8 @@ addPOrbital();
 
 // Render Function
 function render() {
+    //console.log(scene.children);
+
     scene.background = new THREE.Color( 0xd0dbe0 );
     requestAnimationFrame(render);
     controls.update();

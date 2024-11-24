@@ -57,6 +57,11 @@
 	    <button class="icon-button hybrid" onclick="hybridizeOrbitals()">Hybridize</button>
 
 	    <button class="icon-button" onclick="removeAllObjects()">Clear Scene</button>
+	    
+	    <button class="icon-button" onclick="reflectOrbitals();">Invert</button>
+	    <button title="Delete selected atom and orbitals" class="icon-button" onclick="deleteSelectedAtomAndAssociatedObjects()">Delete</button>
+	    <button class="icon-button" id="toggleAddAtomButton" onclick="toggleAddAtomMode();">Add Atom Mode: OFF</button>
+	    
 	</div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
